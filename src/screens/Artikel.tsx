@@ -1,4 +1,4 @@
-// 관사 1분(B5): der · die · das 만 빠르게. 1분 또는 20문제. 틀린 단어는 끝에 모아 보여 준다.
+// 관사(오늘 › 연습 › 관사, B5): der · die · das 만 빠르게. 1분 또는 20개. 틀린 단어는 끝에 모아 보여 준다.
 // 일정(FSRS)은 안 바꾼다(D5). 순위표 없음(개인용).
 import { useEffect, useRef, useState } from 'react'
 import { Button, Skeleton } from '../k/index.tsx'
@@ -7,7 +7,9 @@ import { api } from '../api.ts'
 import { shuffle } from '../deck.ts'
 import { useAsync } from '../hooks.ts'
 import { linkTo, navigate } from '../router.ts'
+import { MODE_NAME, T } from '../text.ts'
 import { Emoji, ErrorBox, Top } from '../ui.tsx'
+import './session.css'
 
 const COUNT = 20
 const SECONDS = 60
@@ -19,7 +21,7 @@ export default function Artikel() {
   const r = useAsync(() => api.artikel(COUNT), [round])
   return (
     <>
-      <Top title="관사 1분" back="/today" />
+      <Top title={MODE_NAME.artikel} back="/today" />
       <main className="page">
         {r.error ? (
           <ErrorBox error={r.error} onRetry={r.reload} />
@@ -86,11 +88,16 @@ function Game({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
   if (over) {
     const asked = Math.min(i, list.length)
     return (
-      <section className="done">
-        <Emoji name={right >= asked * 0.8 ? 'party' : 'study'} size={112} />
-        <h1>
-          {asked}문제 중 {right}개
-        </h1>
+      <section className="ss-end">
+        <Emoji name={right >= asked * 0.8 ? 'party' : 'study'} size={104} />
+        <p className="ss-ox" aria-label={`${T.srO} ${right} · ${T.srX} ${asked - right}`}>
+          <span className="o">
+            {T.o} <b className="num">{right}</b>
+          </span>
+          <span className="x">
+            {T.x} <b className="num">{asked - right}</b>
+          </span>
+        </p>
         {wrong.length > 0 ? (
           <div className="box wh art-wrong">
             <p className="small muted">헷갈린 관사</p>
@@ -104,13 +111,13 @@ function Game({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
             ))}
           </div>
         ) : (
-          <p className="tomorrow">하나도 안 틀렸어요</p>
+          <p className="small muted center">하나도 안 틀렸어요</p>
         )}
         <Button fullWidth size="large" onClick={onAgain}>
           한 판 더
         </Button>
         <Button fullWidth size="large" variant="outlined" color="assistive" onClick={() => navigate('/today')}>
-          오늘로
+          {T.backToday}
         </Button>
       </section>
     )
@@ -119,11 +126,11 @@ function Game({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
   const it = list[i]
   return (
     <section className="art-game">
-      <div className="tophint">
-        <span className="mix">
+      <div className="q-top">
+        <span className="ss-count num">
           {i + 1} / {list.length}
         </span>
-        <span className={'counter num' + (left <= 10 ? ' warn' : '')} aria-live="off">
+        <span className={'ss-count num' + (left <= 10 ? ' warn' : '')} aria-live="off">
           0:{String(left).padStart(2, '0')}
         </span>
       </div>
@@ -143,7 +150,8 @@ function Game({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
           </button>
         ))}
       </div>
-      <p className="small muted center">틀린 관사는 끝나고 다시 보여 줘요 · 키보드 1 2 3</p>
+      <p className="small muted center">틀린 관사는 끝나고 다시 보여 줘요</p>
+      <p className="keys">{T.keysArtikel}</p>
     </section>
   )
 }

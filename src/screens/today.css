@@ -1,0 +1,145 @@
+/* 오늘 화면(기획 v11 5절). 값은 src/k/tokens.css 만 쓴다. 버튼 = KRDS 파랑, 진도 = 민트 */
+.td.page {
+  gap: var(--sp-4);
+  padding-top: var(--sp-2);
+}
+.td-plan.k-card {
+  padding: var(--sp-5);
+  gap: var(--sp-4);
+}
+.td-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.td-head h1 {
+  font-size: var(--fs-h2);
+  line-height: 1.35;
+  margin: 0;
+}
+.td-ro.k-chip {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: var(--fs-xs);
+}
+.td-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.td-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--m5);
+  color: var(--m70);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.td-steps b {
+  font-weight: 800;
+}
+.td-prog {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.td-prog .small {
+  color: var(--g60);
+}
+.td-ox {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  font-size: var(--fs-h3);
+  font-weight: 800;
+}
+.td-ox .o {
+  color: var(--p50);
+}
+.td-ox .x {
+  color: var(--g60);
+}
+.td-ox b {
+  color: var(--g90);
+  font-size: var(--fs-h1);
+}
+.td-ox .small {
+  font-weight: 600;
+}
+/* +10개 · 연습 › 한 줄 */
+.td-more {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+.td-more .k-btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 연습 바텀시트 */
+.td-modes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.td-modes li + li {
+  border-top: 1px solid var(--g10);
+}
+.td-mode {
+  width: 100%;
+  min-height: 60px;
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-1);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--g90);
+}
+.td-mode b {
+  font-size: var(--fs-body);
+}
+.td-chev {
+  color: var(--g40);
+}
+.td-opts {
+  display: grid;
+  gap: var(--sp-3);
+}
+.td-opts p {
+  margin: 0;
+}
+.td-l {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--g70);
+}
+.td-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.td-act {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.td-act .k-btn:last-child {
+  flex: 1;
+}

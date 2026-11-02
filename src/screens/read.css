@@ -20,7 +20,7 @@
 .art-fs { flex: none; display: inline-flex; align-items: baseline; gap: 2px; height: 36px; padding: 0 10px; border: 1px solid var(--g20); border-radius: var(--r-md); background: var(--g0); font-weight: 700; cursor: pointer; }
 .art-fs small { font-size: 11px; color: var(--g50); }
 .art-step { display: flex; flex-direction: column; gap: var(--sp-3); }
-.art-sum { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.art-sum { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-body); line-height: 1.6; color: var(--g80); }
 .art-key { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .art-key li { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--g10); }
 .art-key li:last-child { border-bottom: 0; }

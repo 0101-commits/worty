@@ -82,7 +82,7 @@ export interface Today {
   new_done_today: number;
   reviewed_today: number;
   plan: TodayPlan;
-  /** 오늘 채점 수: 좋음·쉬움 / 다시·어려움 */
+  /** 오늘 채점 수: O(맞힘 = 어려움·좋음·쉬움) / X(틀림 = 다시). v11 부터 어려움 = 늦게 맞힘 */
   ratings: { good: number; again: number };
 }
 
@@ -296,7 +296,7 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
       .bind(dayStart, dayEnd),
     db
       .prepare(
-        `SELECT coalesce(sum(CASE WHEN rating >= 3 THEN 1 ELSE 0 END), 0) AS good, coalesce(sum(CASE WHEN rating <= 2 THEN 1 ELSE 0 END), 0) AS again FROM reviews
+        `SELECT coalesce(sum(CASE WHEN rating >= 2 THEN 1 ELSE 0 END), 0) AS good, coalesce(sum(CASE WHEN rating = 1 THEN 1 ELSE 0 END), 0) AS again FROM reviews
          WHERE reviewed_at >= ? AND undone = 0 AND ${NOT_PRACTICE('session_id')}`,
       )
       .bind(dayStart),

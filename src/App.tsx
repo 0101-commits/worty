@@ -14,6 +14,7 @@ import Drill from './screens/Drill.tsx'
 import Inbox from './screens/Inbox.tsx'
 import Onboarding from './screens/Onboarding.tsx'
 import Practice from './screens/Practice.tsx'
+import Session from './screens/Session.tsx'
 import SettingsScreen from './screens/Settings.tsx'
 import Setup from './screens/Setup.tsx'
 import Stats from './screens/Stats.tsx'
@@ -54,7 +55,7 @@ export default function App() {
     setBootError(undefined)
     // 못 보낸 채점을 먼저 보내고(오늘 덱 요청이 그 전송을 기다림) 오늘 화면이면 덱을 설정과 동시에 받는다
     const unsent = retryUnsent()
-    if (!MOCK && ['today', 'deck'].includes(route.parts[0] ?? 'today')) prefetchToday()
+    if (!MOCK && ['today', 'deck', 'session'].includes(route.parts[0] ?? 'today')) prefetchToday()
     api.settings().then(
       (s) => {
         if (!live) return
@@ -76,7 +77,7 @@ export default function App() {
 
   // 알림 링크(…?n=알림번호)로 열었으면 열림을 한 번 적고(A4) 주소에서 n 을 지운다.
   // 알림 링크는 오늘 · 덱으로만 온다 — 추가 연습 · 더 공부하기의 n(문제 수)을 알림 번호로 읽지 않게
-  const openedN = page === 'today' || page === 'deck' ? route.query.get('n') : null
+  const openedN = page === 'today' || page === 'deck' || page === 'session' ? route.query.get('n') : null
   useEffect(() => {
     if (!settings || !openedN || !/^\d+$/.test(openedN)) return
     api.markOpened(Number(openedN)).catch(() => undefined)
@@ -171,13 +172,16 @@ export default function App() {
       screen = <Setup />
       break
     case 'drill':
-      screen = <Drill mode={settings.swipe_mode} />
+      screen = <Drill />
       break
     case 'artikel':
       screen = <Artikel />
       break
     case 'deck':
-      screen = <Deck onSettings={save} />
+      screen = <Deck />
+      break
+    case 'session':
+      screen = <Session />
       break
     case 'practice':
       screen = <Practice />
@@ -190,7 +194,8 @@ export default function App() {
   return (
     <div className="app">
       {screen}
-      {page !== 'onboarding' && (
+      {/* 세션 · 넘겨 보기는 아래에 X · O 막대가 붙어 탭을 숨긴다(✕ · 뒤로로 나감) */}
+      {!['onboarding', 'session', 'drill'].includes(page) && (
         <nav className="tabbar" aria-label="아래 탭">
           <BottomNavigation value={tab} onValueChange={(v) => '/' + v !== route.path && navigate('/' + v)}>
             {TABS.map(({ value, label, icon: I, on: On }) => (
