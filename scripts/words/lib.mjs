@@ -103,6 +103,49 @@ export function parseRss(xml) {
 export const cefr3 = (d) => (d === 'B1' ? 'B1' : d === 'B2' ? 'B2' : d === 'C1' || d === 'C2' ? 'C1' : null);
 
 /**
+ * 뉴스 빈도 순위 → 어림 레벨(11-02). 예전엔 DAFlex 에 없으면 무조건 C1 이라 뉴스 단어 B2 가 C1 로 들어왔다(v10 검사).
+ * 3,000위 안 = B1 · 10,000위 안 = B2 · 그 밖 = C1. 순위 없으면 null
+ */
+export const rankLevel = (rank) => (rank == null ? null : rank <= 3000 ? 'B1' : rank <= 10000 ? 'B2' : 'C1');
+
+/**
+ * 레벨 투표(11-02 v11 W5): [교재 등급표, 뉴스 순위, AI] 중 둘이 같으면 그 값. 모두 다르면 AI(B1~C1 일 때) → 있는 값 첫째 → C1
+ */
+export function levelVote(votes) {
+  const ok = votes.map((v) => cefr3(v)).filter(Boolean);
+  for (const v of ok) if (ok.filter((x) => x === v).length >= 2) return v;
+  return cefr3(votes[2]) ?? ok[0] ?? 'C1';
+}
+
+const deUmlaut = (s) => s.replace('ä', 'a').replace('ö', 'o').replace('ü', 'u').replace('Ä', 'A').replace('Ö', 'O').replace('Ü', 'U');
+
+/** 「-in」 여성형이고 남성형 명사가 사전에 있으면 true(Mörderin → Mörder, Ärztin → Arzt). 남성형 카드에 함께 적는다 */
+export function feminineOf(lemma, facts, index) {
+  if (!/in$/.test(lemma) || lemma.length < 6 || !(facts?.g ?? []).includes('die')) return false;
+  const base = lemma.slice(0, -2);
+  return [base, deUmlaut(base)].some((b) => (own(index.facts, `${b}|noun`)?.g ?? []).includes('der'));
+}
+
+/**
+ * 뻔한 합성어: 두 부분이 모두 흔한(뉴스 3,000위 안) 아는 낱말(덱에 있거나 DAFlex A1·A2)이면 true — Montagabend = Montag + Abend.
+ * 이음 글자(-s- · -es- · -n- · -en- · -e-)는 떼어 본다. 앞부분은 명사나 형용사
+ */
+export function plainCompound(lemma, index, have) {
+  const known = (k) => have.has(k.toLowerCase()) || ['A1', 'A2'].includes(own(index.daflex, k.split('|')[0].toLowerCase()));
+  const common = (k) => (own(index.leipzig, k) ?? Infinity) <= 3000;
+  const ok = (k) => Boolean(own(index.facts, k)) && known(k) && common(k);
+  for (let i = 3; i <= lemma.length - 3; i++) {
+    const tk = `${lemma[i].toUpperCase()}${lemma.slice(i + 1)}|noun`;
+    if (!ok(tk)) continue;
+    const head = lemma.slice(0, i);
+    for (const h of new Set([head, head.replace(/(es|en|s|n|e)$/, '')])) {
+      if (h.length >= 3 && (ok(`${h}|noun`) || ok(`${h.toLowerCase()}|adj`))) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * 새 단어 후보: 덱에 없고 · 뺀 적 없고 · 위키낱말사전 표제어이고 · A1/A2 아니고 · 약어 아니고 ·
  * (Leipzig 순위 ≤ rankMax 또는 최근 30일 뉴스 2회 이상). 순서 = 뉴스 2회 이상 → 뉴스 수 → Leipzig 순위.
  * have = 덱 열쇠 소문자 Set, skips = 뺀 열쇠 Set, hits = Map(열쇠 → {n})
@@ -114,14 +157,18 @@ export function pickCandidates({ index, have, skips, hits, max = 30, rankMax = 2
     const rank = own(index.leipzig, key) ?? null;
     const n = hits.get(key)?.n ?? 0;
     if (!(n >= 2 || (rank !== null && rank <= rankMax))) continue;
-    if (have.has(key.toLowerCase()) || skips.has(key) || !own(index.facts, key)) continue;
+    const facts = own(index.facts, key);
+    if (have.has(key.toLowerCase()) || skips.has(key) || !facts) continue;
     const [lemma, pos] = key.split('|');
     if (lemma.length < 3 || /^[A-ZÄÖÜ]{2,}$/.test(lemma)) continue; // 약어(EU·SPD)
     // 동음이의: 표제어가 기능어(einen = 관사)이거나 다른 기본형의 활용형(schönen = schön)이면 빈도가 그쪽 몫이라 뺀다
     if (fn.has(lemma) || (own(index.forms, lemma) ?? []).some((k) => k !== key)) continue;
     const d = own(index.daflex, lemma.toLowerCase());
     if (d === 'A1' || d === 'A2') continue; // 이미 아는 단계
-    out.push({ key, lemma, pos, rank, hits: n, level: cefr3(d) ?? 'C1' });
+    // 11-02 v10 검사로 넣은 거르기: 지역어·옛말·속어·약어·영어 그대로 빌린 말 · 여성형 중복 · 뻔한 합성어
+    if (facts.fl?.length) continue;
+    if (pos === 'noun' && (feminineOf(lemma, facts, index) || plainCompound(lemma, index, have))) continue;
+    out.push({ key, lemma, pos, rank, hits: n, level: cefr3(d) ?? rankLevel(rank) ?? 'C1', dl: cefr3(d), rl: rankLevel(rank) });
   }
   out.sort((a, b) => Number(b.hits >= 2) - Number(a.hits >= 2) || b.hits - a.hits || (a.rank ?? Infinity) - (b.rank ?? Infinity) || a.lemma.localeCompare(b.lemma, 'de'));
   return out.slice(0, max);
@@ -190,7 +237,7 @@ export function acceptContent(arr, list) {
       res.push({ key: o.key, keep: false, reason: `AI 등급 ${o.cefr}(B1~C1 밖)` });
       continue;
     }
-    const c = { key: o.key, keep: true, gloss_ko: s(o.gloss_ko).slice(0, 40), example_de: s(o.example_de), example_ko: s(o.example_ko).slice(0, 80), scene_en: s(o.scene_en).slice(0, 300) };
+    const c = { key: o.key, keep: true, cefr: o.cefr, gloss_ko: s(o.gloss_ko).slice(0, 40), example_de: s(o.example_de), example_ko: s(o.example_ko).slice(0, 80), scene_en: s(o.scene_en).slice(0, 300) };
     if (c.gloss_ko && c.example_de && c.example_de.length <= 70 && c.example_ko && c.scene_en.startsWith('Borti ')) res.push(c);
   }
   return res;

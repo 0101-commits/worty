@@ -76,7 +76,7 @@ test('pickCandidates: 덱·뺀 것·사실 없음·A1/A2·약어·기준 미달 
   const hits = new Map([['Vorfall|noun', { n: 3, url: 'https://b' }], ['Fremd|noun', { n: 5, url: null }]]);
   const out = pickCandidates({ index: INDEX, have: new Set(['haus|noun']), skips: new Set(), hits, max: 10 });
   assert.deepEqual(out.map((c) => c.key), ['Vorfall|noun', 'ermitteln|verb']);
-  assert.deepEqual(out[0], { key: 'Vorfall|noun', lemma: 'Vorfall', pos: 'noun', rank: 30000, hits: 3, level: 'B1' });
+  assert.deepEqual(out[0], { key: 'Vorfall|noun', lemma: 'Vorfall', pos: 'noun', rank: 30000, hits: 3, level: 'B1', dl: 'B1', rl: 'C1' });
   assert.equal(out[1].level, 'B2');
   assert.deepEqual(pickCandidates({ index: INDEX, have: new Set(), skips: new Set(['ermitteln|verb']), hits: new Map(), max: 10 }).map((c) => c.key), []);
 });

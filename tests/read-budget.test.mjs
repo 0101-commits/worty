@@ -140,7 +140,7 @@ test('/api/admin/words-export: 한 질의로 전부, 인증 필요', async () =>
   seed(db, 5);
   const r = await (await call(db, '/api/admin/words-export')).json();
   assert.equal(r.total, 5);
-  assert.deepEqual(Object.keys(r.items[0]).sort(), ['freq_rank', 'gender', 'gloss_ko', 'id', 'image_status', 'introduced_at', 'level', 'level_src', 'lemma', 'pos', 'reps', 'seq', 'state'].sort());
+  assert.deepEqual(Object.keys(r.items[0]).sort(), ['created_at', 'freq_rank', 'gender', 'gloss_ko', 'id', 'image_status', 'introduced_at', 'level', 'level_src', 'lemma', 'pos', 'reps', 'seq', 'state'].sort());
   const noAuth = await worker.fetch(new Request('https://x.test/api/admin/words-export'), env(db), { waitUntil() {} });
   assert.equal(noAuth.status, 401);
 });

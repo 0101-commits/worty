@@ -11,8 +11,31 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { indexLooksSane, wordKey } from './lib.mjs';
 
-/** 색인 만드는 규칙의 판. 규칙을 바꾸면 올린다 → 같은 달이라도 캐시 색인을 다시 만든다. 2 = 동음 복수형 「모름」(10-15) */
-export const INDEX_VERSION = 2;
+/** 색인 만드는 규칙의 판. 규칙을 바꾸면 올린다 → 같은 달이라도 캐시 색인을 다시 만든다. 2 = 동음 복수형 「모름」(10-15) · 3 = 뜻풀이 꼬리표 fl(11-02) */
+export const INDEX_VERSION = 3;
+
+// 2026-11-02 v10 검사: C2 260개 대부분이 오스트리아·스위스 말·옛말·속어, 항목 문제 120개 중 영어·약어가 많았다.
+// 위키낱말사전 뜻풀이 꼬리표로 거른다 — 모든 뜻이 그 꼬리표를 달 때만(한 뜻이라도 보통 말이면 보통 단어).
+// colloquial·informal 은 넣지 않는다(kriegen·quatschen 같은 생활어가 빠진다)
+const FLAG_RE = {
+  region: /\b(austria|austrian|switzerland|swiss|liechtenstein|south[- ]tyrol|bavaria|bavarian|southern[- ]germany|regional|dialectal)\b/,
+  old: /\b(archaic|obsolete|dated|historical|poetic|literary)\b/,
+  slang: /\b(slang|vulgar|derogatory|offensive|childish)\b/,
+  abbr: /\b(abbreviation|initialism|acronym|clipping)\b/,
+};
+
+/** 표제어 하나의 꼬리표: region · old · slang · abbr(모든 뜻에 붙을 때) + en(영어에서 그대로 빌린 말) */
+export function entryFlags(o) {
+  const senses = (o?.senses ?? []).filter((x) => x?.glosses?.length);
+  const out = [];
+  if (senses.length) {
+    for (const [k, re] of Object.entries(FLAG_RE)) {
+      if (senses.every((x) => re.test([...(x.tags ?? []), ...(x.raw_tags ?? [])].join(' ').toLowerCase()))) out.push(k);
+    }
+  }
+  if (/\b(borrowed|borrowing|unadapted borrowing) from English\b/i.test(o?.etymology_text ?? '')) out.push('en');
+  return out;
+}
 /** 캐시 색인을 그대로 써도 되나: 이번 달 + 같은 판 */
 export const indexFresh = (old, month) => Boolean(old) && old.month === month && old.v === INDEX_VERSION;
 export const KAIKKI_URL = 'https://kaikki.org/dictionary/German/kaikki.org-dictionary-German.jsonl.gz';
@@ -128,6 +151,10 @@ export async function buildIndex({ kaikkiLines, daflexText, leipzigText, deckKey
     for (const f of sp) put(sep, f, key);
     const prev = facts.get(key);
     const en = prev?.en ?? o.senses?.find((x) => x.glosses?.length)?.glosses[0]?.slice(0, 80) ?? null;
+    // 동음 표제어가 여럿이면 꼬리표는 모두에 있는 것만(하나라도 보통 말이면 보통 단어)
+    const mine = entryFlags(o);
+    const fl = prev ? (prev.fl ?? []).filter((x) => mine.includes(x)) : mine;
+    const extra = fl.length ? { fl } : {};
     if (o.pos === 'noun') {
       const g = new Set(prev?.g ?? []);
       for (const x of o.senses ?? []) for (const t of x.tags ?? []) if (GENDER[t]) g.add(GENDER[t]);
@@ -135,8 +162,8 @@ export async function buildIndex({ kaikkiLines, daflexText, leipzigText, deckKey
       const ps = plurals.get(key) ?? new Set();
       ps.add((o.forms ?? []).find((f) => f.tags?.length === 1 && f.tags[0] === 'plural')?.form ?? '');
       plurals.set(key, ps);
-      facts.set(key, { g: [...g], en });
-    } else facts.set(key, { en });
+      facts.set(key, { g: [...g], en, ...extra });
+    } else facts.set(key, { en, ...extra });
   }
   // 복수형: 동음 표제어끼리 다르면 「모름」(칸 없음) — 그 값을 Claude 에게도 보여 주므로, 하나만 고르면 「사전과 같을 때만」 검사가 독립 근거가 아니게 된다
   for (const [key, ps] of plurals) if (ps.size === 1) facts.get(key).pl = [...ps][0] || null;

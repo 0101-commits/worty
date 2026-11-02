@@ -9,7 +9,7 @@ import { askJson } from '../ai.mjs';
 import { ROOT, addDays, api, kstDay, notify, requireEnv, setOutput } from '../admin.mjs';
 import { ensureIndex } from './sources.mjs';
 import {
-  acceptContent, acceptRequests, cefr3, contentPrompt, countNews, newsItems, newsProblems, own, parseRss, parseTagesschau, pickBacklog, pickCandidates, requestPrompt, wordKey,
+  acceptContent, acceptRequests, cefr3, contentPrompt, countNews, levelVote, newsItems, newsProblems, own, parseRss, parseTagesschau, pickBacklog, pickCandidates, requestPrompt, wordKey,
 } from './lib.mjs';
 
 const DRY = process.argv.includes('--dry');
@@ -147,7 +147,7 @@ async function candidates(index) {
     }
     const f = own(index.facts, c.key);
     items.push({
-      lemma: c.lemma, pos: c.pos, gender: f?.g?.[0] ?? null, plural: f?.pl ?? null, level: c.level, level_src: 'news',
+      lemma: c.lemma, pos: c.pos, gender: f?.g?.[0] ?? null, plural: f?.pl ?? null, level: levelVote([c.dl, c.rl, o.cefr]), level_src: 'news',
       gloss_en: f?.en ?? null, gloss_ko: o.gloss_ko, gloss_status: 'generated', example_de: o.example_de, example_ko: o.example_ko,
       example_src: 'gen', scene_en: o.scene_en, news_rank: c.rank,
     });

@@ -32,7 +32,7 @@ const key = (w) => `${w.lemma}|${w.pos}`;
 export function loadWordsLocal(db = openLocalDb()) {
   const rows = db
     .prepare(
-      `SELECT w.id, w.lemma, w.pos, w.level, w.level_src, w.freq_rank, w.image_status, c.state, c.reps, c.introduced_at
+      `SELECT w.id, w.lemma, w.pos, w.level, w.level_src, w.freq_rank, w.image_status, w.created_at, c.state, c.reps, c.introduced_at
        FROM words w LEFT JOIN cards c ON c.word_id = w.id ORDER BY w.id`,
     )
     .all();
@@ -48,7 +48,21 @@ async function loadWordsRemote() {
 const toWord = (x) => ({
   id: x.id, lemma: x.lemma, pos: x.pos, level: x.level, level_src: x.level_src ?? null, freq_rank: x.freq_rank ?? null,
   learned: Boolean(x.introduced_at) || x.state > 0 || x.reps > 0, reps: x.reps ?? 0, has_image: x.image_status === 'ok',
+  created_at: x.created_at ?? null,
 });
+
+/** 최근 days 일 안에 들어온 단어만(달마다 점검, 11-02 v11 W6). created_at = 'YYYY-MM-DD HH:MM:SS'(UTC) */
+export function recentOnly(words, days, now = new Date()) {
+  const from = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+  return words.filter((w) => w.created_at && w.created_at >= from);
+}
+
+/** 달마다 점검 한 줄: AI 가 범위 밖(A1·A2·C2)으로 본 수와 예 */
+export function auditLine(rows) {
+  const out = rows.filter((r) => ['A1', 'A2', 'C2'].includes(r.ai_lv));
+  const ex = out.slice(0, 8).map((r) => `${r.lemma}(${r.ai_lv})`).join(', ');
+  return `새 단어 ${rows.length}개 중 범위 밖 ${out.length}개${ex ? ` — ${ex}` : ''}`;
+}
 
 // ---------- 2) DAFlex ----------
 
@@ -238,6 +252,8 @@ async function main() {
   if (remote) requireEnv();
   let words = remote ? await loadWordsRemote() : loadWordsLocal();
   console.error(`단어 ${words.length}개 읽음(${remote ? '관리 API words-export' : '백업 로컬 사본'})`);
+  const ri = args.indexOf('--recent');
+  if (ri >= 0) words = recentOnly(words, Number(args[ri + 1]) || 35);
   if (limit > 0) words = words.slice(0, limit);
 
   const daflex = await loadDaflex();
@@ -255,6 +271,10 @@ async function main() {
   const summary = summarize(rows);
   writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary));
+  if (args.includes('--notify')) {
+    const { notify } = await import('../admin.mjs');
+    await notify('progress', 'Worty 달마다 단어 점검', `${auditLine(rows)} · 아티팩트 level-audit`);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

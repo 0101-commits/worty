@@ -1,9 +1,12 @@
 # 단어 등급 감사(읽기 전용) — 단어마다 DAFlex · AI(Gemini Flash-Lite, 모자라면 Groq) 둘째 등급을 모아 지울 목록의 근거로 쓴다.
-# 서버·D1 에 쓰지 않는다. 결과는 아티팩트 level-audit(words.json · summary.json · ai-cache.jsonl). 손으로만 돌린다.
+# 서버·D1 에 쓰지 않는다. 결과는 아티팩트 level-audit(words.json · summary.json · ai-cache.jsonl).
+# 2026-11-02 v11 W6: 달마다 2일 04:47 KST 에 최근 35일 새 단어만 점검해 디스코드로 한 줄(손 실행은 전부).
 # 비밀값: APP_URL · API_TOKEN · GEMINI_API_KEY · GROQ_API_KEY (daily.yml 과 같음)
 name: level-audit
 
 on:
+  schedule:
+    - cron: '47 19 1 * *' # 한국 매달 2일 04:47
   workflow_dispatch:
     inputs:
       limit:
@@ -26,6 +29,7 @@ jobs:
       API_TOKEN: ${{ secrets.API_TOKEN }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       LIMIT: ${{ inputs.limit }}
       NO_AI: ${{ inputs.no_ai && '--no-ai' || '' }}
     steps:
@@ -35,7 +39,12 @@ jobs:
           node-version: 24
           check-latest: true
       - name: level-audit.mjs
-        run: node scripts/words/level-audit.mjs --limit "${LIMIT:-0}" $NO_AI
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            node scripts/words/level-audit.mjs --remote --recent 35 --notify
+          else
+            node scripts/words/level-audit.mjs --remote --limit "${LIMIT:-0}" $NO_AI
+          fi
       # 중간에 실패해도 쌓인 AI 답은 남긴다
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

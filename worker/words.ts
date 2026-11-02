@@ -156,7 +156,7 @@ export async function imageWords(db: D1Database) {
 /** 스크립트용 단어 전부 한 질의(≈ 단어 수 × 2 행). 등급 감사 같은 일괄 읽기는 /api/words 대신 이걸 쓴다 */
 export async function wordsExport(db: D1Database) {
   const r = await db.prepare(
-    `SELECT w.id, w.lemma, w.pos, w.gender, w.level, w.level_src, w.freq_rank, w.gloss_ko, w.image_status, w.seq,
+    `SELECT w.id, w.lemma, w.pos, w.gender, w.level, w.level_src, w.freq_rank, w.gloss_ko, w.image_status, w.seq, w.created_at,
             c.state, c.reps, c.introduced_at
      FROM words w LEFT JOIN cards c ON c.word_id = w.id ORDER BY w.id`,
   ).all();
