@@ -30,7 +30,7 @@ export function useToaster() {
 }
 
 /** 위 막대: 제목 + (뒤로) + (받은편지함 · 설정) */
-export function Top({ title, back, actions = false }: { title: ReactNode; back?: string; actions?: boolean }) {
+export function Top({ title, back, actions = false, extra }: { title: ReactNode; back?: string; actions?: boolean; extra?: ReactNode }) {
   return (
     <div className="top">
       <TopNavigation
@@ -44,6 +44,7 @@ export function Top({ title, back, actions = false }: { title: ReactNode; back?:
         trailingContent={
           actions ? (
             <>
+              {extra}
               <TopNavigationButton aria-label="받은편지함" onClick={() => navigate('/inbox')}>
                 <IconBell />
               </TopNavigationButton>

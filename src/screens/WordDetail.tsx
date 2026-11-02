@@ -1,86 +1,109 @@
-// 단어 하나: 그림 · 뜻 · 예문 · 카드 상태 · 최근 채점
-import { ContentBadge, Skeleton } from '../k/index.tsx'
-import { api } from '../api.ts'
-import { RATING_LABEL, isWeak } from '../deck.ts'
-import { STATE_LABEL, dayDiff, fmtDate, fmtDay } from '../format.ts'
+// 단어 하나(v11): 단어 · 관사 · ▶ · 뜻 · 칩 · 그림 · 예문 · 「내 기록」(다음 복습 · O · X) · 제외 · 수정 요청
+import { useState } from 'react'
+import { Button, Card, ContentBadge, IconButton, Skeleton } from '../k/index.tsx'
+import { IconPlay } from '../k/icons.tsx'
+import { api, errorText, imgSrc } from '../api.ts'
+import { fmtDay } from '../format.ts'
 import { useAsync } from '../hooks.ts'
 import { ReportButton } from '../Report.tsx'
-import { Example, ErrorBox, LevelBadge, Lemma, POS_LABEL, Top, WeakBadge, WordImage } from '../ui.tsx'
+import { Example, ErrorBox, LevelBadge, Lemma, POS_LABEL, Top, useToaster } from '../ui.tsx'
+import type { WordDetailResponse } from '../../shared/api.ts'
+import './word-detail.css'
+
+/** 브라우저 음성으로 독일어 읽기(없으면 조용히 건너뜀) */
+function speak(text: string) {
+  if (!('speechSynthesis' in window)) return
+  window.speechSynthesis.cancel()
+  const u = new SpeechSynthesisUtterance(text)
+  u.lang = 'de-DE'
+  window.speechSynthesis.speak(u)
+}
+
+/** 「다음 복습 11/13 · O 6 · X 1」 — 내부 용어(안정도 · 난이도) 없이 날짜와 O·X 수만 */
+function myRecord(d: WordDetailResponse): string {
+  const next = d.card.suspended ? '제외함' : d.card.state === 0 ? '아직 안 봄' : `다음 복습 ${fmtDay(d.card.due)}`
+  return `${next} · O ${d.ox.o} · X ${d.ox.x}`
+}
 
 export default function WordDetail({ id }: { id: string }) {
   const r = useAsync(() => api.word(id), [id])
   const d = r.data
   return (
     <>
-      <Top title={d ? <Lemma word={d.word} /> : '단어'} back="/words" />
-      <main className="page">
+      <Top title="단어" back="/words" />
+      <main className="page wdt-page">
         {r.error ? (
           <ErrorBox error={r.error} onRetry={r.reload} />
         ) : !d ? (
           <>
-            <Skeleton variant="rectangle" width="100%" height={220} radius={20} />
+            <Skeleton variant="rectangle" width="100%" height={220} radius={16} />
             <Skeleton variant="text" width="50%" height={28} />
             <Skeleton variant="text" width="80%" height={18} />
           </>
         ) : (
-          <>
-            <article className="wcard">
-              <div className="ill">
-                <WordImage word={d.word} />
-              </div>
-              <div className="txt">
-                <Lemma word={d.word} className="big" />
-                <div className="mn">{d.word.gloss_ko ?? '뜻 준비 중'}</div>
-                <div className="dk-meta">
-                  <ContentBadge size="xsmall" variant="outlined" color="neutral">{POS_LABEL[d.word.pos] ?? d.word.pos}</ContentBadge>
-                  <LevelBadge level={d.word.level} />
-                  {isWeak(d.card) && <WeakBadge />}
-                  {d.word.plural && <span lang="de">복수 {d.word.plural}</span>}
-                  {d.word.ipa && <span>{d.word.ipa}</span>}
-                </div>
-                {d.word.example_de && (
-                  <p className="dk-ex">
-                    <span lang="de">
-                      <Example de={d.word.example_de} lemma={d.word.lemma} hit={d.word.example_hit} />
-                    </span>
-                    {d.word.example_ko && <span className="ko">{d.word.example_ko}</span>}
-                  </p>
-                )}
-              </div>
-            </article>
-            <div className="report-row">
-              <ReportButton wordId={d.word.id} lemma={d.word.lemma} />
-            </div>
-
-            <h3 className="sec-t">카드</h3>
-            <div className="box">
-              <div className="kv"><span>상태</span><b>{STATE_LABEL[d.card.state]}{d.card.suspended ? ' · 멈춤' : ''}</b></div>
-              <div className="kv">
-                <span>다음 복습</span>
-                <b>{d.card.state === 0 ? '아직 안 봄' : dayDiff(d.card.due) <= 0 ? '오늘' : `${fmtDay(d.card.due)} · ${dayDiff(d.card.due)}일 뒤`}</b>
-              </div>
-              <div className="kv"><span>안정도</span><b>{d.card.state === 0 ? '—' : `${d.card.stability.toFixed(1)}일`}</b></div>
-              <div className="kv"><span>본 횟수 · 잊은 횟수</span><b>{d.card.reps} · {d.card.lapses}</b></div>
-              <div className="kv"><span>처음 본 날</span><b>{d.card.introduced_at ? fmtDay(d.card.introduced_at) : '—'}</b></div>
-            </div>
-
-            <h3 className="sec-t">최근 채점</h3>
-            {d.reviews.length === 0 ? (
-              <p className="small muted">아직 채점한 적이 없어요.</p>
-            ) : (
-              <ul className="box revs">
-                {d.reviews.map((v) => (
-                  <li className="kv" key={v.id}>
-                    <span className={'rate r' + v.rating}>{RATING_LABEL[v.rating]}</span>
-                    <span className="small">{fmtDate(v.reviewed_at)}</span>
-                    <b>{v.scheduled_days > 0 ? `${v.scheduled_days}일 뒤로` : '오늘 다시'}</b>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
+          <Body key={d.word.id} d={d} reload={r.reload} />
         )}
       </main>
+    </>
+  )
+}
+
+function Body({ d, reload }: { d: WordDetailResponse; reload: () => void }) {
+  const toast = useToaster()
+  const [busy, setBusy] = useState(false)
+  const [imgBroken, setImgBroken] = useState(false)
+  const w = d.word
+  const toggleSuspend = async () => {
+    setBusy(true)
+    try {
+      await api.suspend(w.id, !d.card.suspended)
+      toast(d.card.suspended ? '다시 복습에 넣었어요.' : '복습에서 제외했어요.', 'positive')
+      reload()
+    } catch (e) {
+      toast(errorText(e), 'negative')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <Card as="article" className="wdt-card">
+        {w.image && !imgBroken && <img className="wdt-img" src={imgSrc(w.id)} alt="" draggable={false} onError={() => setImgBroken(true)} />}
+        <div className="wdt-head">
+          <Lemma word={w} className="wdt-lemma" />
+          <IconButton size="medium" aria-label={`${w.lemma} 듣기`} onClick={() => speak((w.pos === 'noun' && w.gender ? w.gender + ' ' : '') + w.lemma)}>
+            <IconPlay />
+          </IconButton>
+        </div>
+        <div className="wdt-mean">{w.gloss_ko ?? '뜻 준비 중'}</div>
+        <div className="wdt-chips">
+          <ContentBadge size="xsmall" variant="outlined" color="neutral">{POS_LABEL[w.pos] ?? w.pos}</ContentBadge>
+          <LevelBadge level={w.level} />
+          {w.plural && <span lang="de" className="wdt-plural">복수 {w.plural}</span>}
+        </div>
+        {w.example_de && (
+          <p className="wdt-ex">
+            <span lang="de">
+              <Example de={w.example_de} lemma={w.lemma} hit={w.example_hit} />
+            </span>
+            {w.example_ko && <span className="ko">{w.example_ko}</span>}
+          </p>
+        )}
+      </Card>
+
+      <Card className="wdt-rec">
+        <h3>내 기록</h3>
+        <p className="wdt-rec-line">{myRecord(d)}</p>
+      </Card>
+
+      <div className="wdt-actions">
+        <Button variant="outlined" color="assistive" loading={busy} onClick={toggleSuspend}>
+          {d.card.suspended ? '제외 풀기' : '제외'}
+        </Button>
+        <ReportButton wordId={w.id} lemma={w.lemma} className="k-btn k-btn-tertiary k-btn-medium">
+          수정 요청
+        </ReportButton>
+      </div>
     </>
   )
 }

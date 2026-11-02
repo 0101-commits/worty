@@ -1,75 +1,74 @@
-// 단어 목록: 검색 · 칩 · 정렬(B3) · 더 보기 · 이 목록으로 연습
-import { useEffect, useState } from 'react'
-import { Button, Chip, ContentBadge, SearchField, SegmentedControl, SegmentedControlItem, Skeleton } from '../k/index.tsx'
-import type { DeckItem, WordsQuery } from '../../shared/api.ts'
-import { api, errorText } from '../api.ts'
-import { STATE_LABEL, dueText, fmtDay, num, studyDay } from '../format.ts'
+// 단어(v11): 검색 한 줄 · 꼬리표 한 줄(상태·레벨·품사·그림) · 바로가기(자주 틀림·이번 주) · 순서 · 목록 · 「N개 연습」
+// 검색은 움라우트를 푼 글자로 맞고(ae = ä), 앞의 der/die/das 는 무시, 한국어 뜻도 찾는다(서버 /api/words).
+import { useEffect, useState, type ReactNode } from 'react'
+import { BottomSheet, Button, Chip, ContentBadge, SearchField, Skeleton, TopNavigationButton } from '../k/index.tsx'
+import { IconChevronDown, IconPlus } from '../k/icons.tsx'
+import type { DeckItem, WordsCountsResponse } from '../../shared/api.ts'
+import { api, errorText, imgSrc } from '../api.ts'
+import { num } from '../format.ts'
 import { useDebounced } from '../hooks.ts'
 import { linkTo, navigate } from '../router.ts'
 import { AddWord } from '../AddWord.tsx'
-import { isWeak } from '../deck.ts'
-import { Emoji, ErrorBox, LevelBadge, Lemma, Top, WeakBadge, WordImage } from '../ui.tsx'
+import { dayDiff } from '../format.ts'
+import { EMPTY_FILTER, practiceParams, toQuery, type SortKey, type WordsFilter } from '../wordsFilter.ts'
+import { Emoji, ErrorBox, Lemma, POS_LABEL, Top } from '../ui.tsx'
+import './words.css'
 
-const CHIPS: Array<{ id: string; label: string; q: WordsQuery }> = [
-  { id: 'all', label: '전체', q: {} },
-  { id: 'new', label: '새 단어', q: { state: 'new' } },
-  { id: 'learning', label: '학습 중', q: { state: 'learning' } },
-  { id: 'review', label: '복습', q: { state: 'review' } },
-  { id: 'B1', label: 'B1', q: { level: 'B1' } },
-  { id: 'B2', label: 'B2', q: { level: 'B2' } },
-  { id: 'C1', label: 'C1', q: { level: 'C1' } },
-]
 const SIZE = 30
-type Sort = NonNullable<WordsQuery['sort']>
-const SORTS: Array<[Sort, string]> = [
-  ['seq', '학습 순서'],
-  ['learned', '배운 날짜'],
-  ['alpha', '가나다'],
-]
-// 상세에 갔다 와도 검색어·칩·정렬을 기억한다
-let remembered: { q: string; chip: string; sort: Sort } = { q: '', chip: 'all', sort: 'seq' }
+/** 연습 한 판 최대 장 수 */
+const PRACTICE_MAX = 50
 
-/** 지금 보이는 거르기·정렬 그대로 추가 연습(B4)으로 — 앞에서 n장 */
-function drillQuery(chip: string, q: string, sort: Sort, n: number): string {
-  const c = CHIPS.find((x) => x.id === chip)?.q ?? {}
-  const p = new URLSearchParams({ from: 'words', n: String(n <= 10 ? 10 : n) })
-  if (q) p.set('q', q)
-  if (c.level) p.set('level', c.level)
-  if (c.state) p.set('state', c.state)
-  if (sort !== 'seq') p.set('sort', sort)
-  return p.toString()
-}
+type Opt<T extends string> = Array<[T, string]>
+const STATE_OPTS: Opt<WordsFilter['state']> = [['all', '전체'], ['new', '새 단어'], ['learning', '학습 중'], ['review', '복습'], ['suspended', '제외한 단어']]
+const LEVEL_OPTS: Opt<WordsFilter['level']> = [['all', '전체'], ['B1', 'B1'], ['B2', 'B2'], ['C1', 'C1']]
+const POS_OPTS: Opt<WordsFilter['pos']> = [['all', '전체'], ...(Object.entries(POS_LABEL) as Array<[WordsFilter['pos'], string]>)]
+const IMAGE_OPTS: Opt<WordsFilter['image']> = [['all', '전체'], ['yes', '그림 있는 단어'], ['no', '그림 없는 단어']]
+const SORT_OPTS: Opt<SortKey> = [['seq', '순서'], ['learned', '날짜'], ['alpha', '가나다']]
+
+type SheetKey = 'state' | 'level' | 'pos' | 'image' | 'sort'
+const TAGS: Array<{ key: Exclude<SheetKey, 'sort'>; name: string; opts: Opt<never> }> = [
+  { key: 'state', name: '상태', opts: STATE_OPTS as Opt<never> },
+  { key: 'level', name: '레벨', opts: LEVEL_OPTS as Opt<never> },
+  { key: 'pos', name: '품사', opts: POS_OPTS as Opt<never> },
+  { key: 'image', name: '그림', opts: IMAGE_OPTS as Opt<never> },
+]
+const OPTS: Record<SheetKey, Opt<never>> = { state: STATE_OPTS as Opt<never>, level: LEVEL_OPTS as Opt<never>, pos: POS_OPTS as Opt<never>, image: IMAGE_OPTS as Opt<never>, sort: SORT_OPTS as Opt<never> }
+const SHEET_TITLE: Record<SheetKey, string> = { state: '상태', level: '레벨', pos: '품사', image: '그림', sort: '정렬' }
+
+// 상세에 갔다 와도 거르기를 기억한다
+let remembered: WordsFilter = EMPTY_FILTER
 
 export default function Words({ add = '', url = '', open = false }: { add?: string; url?: string; open?: boolean }) {
-  const [q, setQ] = useState(remembered.q)
-  const [chip, setChip] = useState(remembered.chip)
-  const [sort, setSort] = useState<Sort>(remembered.sort)
-  const dq = useDebounced(q.trim(), 250)
-  const key = `${dq}|${chip}|${sort}`
+  const [f, setF] = useState<WordsFilter>(remembered)
+  const [sheet, setSheet] = useState<SheetKey | null>(null)
+  const [addOpen, setAddOpen] = useState(open || Boolean(add || url))
+  const dq = useDebounced(f.q.trim(), 300)
+  const q = { ...f, q: dq }
+  const key = JSON.stringify(toQuery(q))
   const [pager, setPager] = useState({ key, page: 1 })
   const page = pager.key === key ? pager.page : 1
   const [list, setList] = useState<{ key: string; items: DeckItem[]; total: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [tick, setTick] = useState(0)
+  const [counts, setCounts] = useState<WordsCountsResponse | null>(null)
+  const set = (p: Partial<WordsFilter>) => setF((x) => ({ ...x, ...p }))
 
   useEffect(() => {
-    remembered = { q, chip, sort }
-  }, [q, chip, sort])
+    remembered = f
+  }, [f])
+  useEffect(() => {
+    api.wordsCounts().then(setCounts, () => setCounts(null))
+  }, [])
 
   useEffect(() => {
     let live = true
     setLoading(true)
     setError(undefined)
-    const query = CHIPS.find((c) => c.id === chip)?.q ?? {}
-    api.words({ ...query, q: dq || undefined, sort: sort === 'seq' ? undefined : sort, page, size: SIZE }).then(
+    api.words({ ...toQuery(q), page, size: SIZE }).then(
       (r) => {
         if (!live) return
-        setList((prev) => ({
-          key,
-          total: r.total,
-          items: page > 1 && prev?.key === key ? [...prev.items, ...r.items] : r.items,
-        }))
+        setList((prev) => ({ key, total: r.total, items: page > 1 && prev?.key === key ? [...prev.items, ...r.items] : r.items }))
         setLoading(false)
       },
       (e) => {
@@ -81,59 +80,76 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
     return () => {
       live = false
     }
-  }, [key, dq, chip, sort, page, tick])
+    // key 가 q·거르기 전부를 담는다
+  }, [key, page, tick])
 
-  const fresh = list?.key === key ? list : null // 칩·검색을 바꾼 직후엔 옛 목록을 감춘다
-  const filtered = dq !== '' || chip !== 'all'
+  const fresh = list?.key === key ? list : null // 거르기를 바꾼 직후엔 옛 목록을 감춘다
+  const filtered = JSON.stringify(toQuery(q)) !== '{}'
+  const n = fresh ? Math.min(fresh.total, PRACTICE_MAX) : 0
+  const tagLabel = (t: (typeof TAGS)[number]) => {
+    const v = f[t.key] as string
+    return v === 'all' ? t.name : (t.opts.find(([o]) => o === v)?.[1] ?? t.name)
+  }
 
   return (
     <>
-      <Top title="단어" actions />
-      <main className="page">
-        <AddWord key={add + '|' + url} initialWord={add} initialUrl={url} initialOpen={open || Boolean(add || url)} />
+      <Top
+        title="단어"
+        actions
+        extra={
+          <TopNavigationButton aria-label="단어 넣기" onClick={() => setAddOpen(true)}>
+            <IconPlus />
+          </TopNavigationButton>
+        }
+      />
+      <main className="page wd-page">
         <SearchField
           size="medium"
-          placeholder="단어 · 뜻 검색"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onReset={() => setQ('')}
+          placeholder="독일어 · 뜻 검색 (ae = ä)"
+          value={f.q}
+          onChange={(e) => set({ q: e.target.value })}
+          onReset={() => set({ q: '' })}
           aria-label="단어 검색"
         />
-        <div className="chips" role="group" aria-label="거르기" data-hscroll>
-          {CHIPS.map((c) => (
-            <Chip key={c.id} size="small" variant="outlined" active={chip === c.id} aria-pressed={chip === c.id} onClick={() => setChip(c.id)}>
-              {c.label}
+        <div className="wd-tags" role="group" aria-label="거르기" data-hscroll>
+          {TAGS.map((t) => (
+            <Chip key={t.key} size="small" variant="outlined" active={f[t.key] !== 'all'} aria-haspopup="dialog" onClick={() => setSheet(t.key)}>
+              {tagLabel(t)} <IconChevronDown size={16} />
             </Chip>
           ))}
         </div>
-        <SegmentedControl size="small" value={sort} onValueChange={(v) => setSort(v as Sort)} aria-label="정렬">
-          {SORTS.map(([v, l]) => (
-            <SegmentedControlItem key={v} value={v}>{l}</SegmentedControlItem>
-          ))}
-        </SegmentedControl>
+        <div className="wd-short" role="group" aria-label="바로가기">
+          <Chip size="small" variant="outlined" active={f.weak} aria-pressed={f.weak} onClick={() => set({ weak: !f.weak })}>
+            자주 틀림{counts ? ` ${num(counts.weak)}` : ''}
+          </Chip>
+          <Chip size="small" variant="outlined" active={f.week} aria-pressed={f.week} onClick={() => set({ week: !f.week })}>
+            이번 주{counts ? ` ${num(counts.week)}` : ''}
+          </Chip>
+          {filtered && (
+            <button type="button" className="wd-reset" onClick={() => set({ ...EMPTY_FILTER, sort: f.sort })}>
+              거르기 풀기
+            </button>
+          )}
+        </div>
         {fresh && (
-          <div className="words-bar">
-            <p className="small">{num(fresh.total)}개</p>
-            {fresh.total > 0 && (
-              <Button size="small" variant="outlined" color="primary" onClick={() => navigate('/drill?' + drillQuery(chip, dq, sort, Math.min(10, fresh.total)))}>
-                이 목록 {Math.min(10, fresh.total)}장 연습
-              </Button>
-            )}
+          <div className="wd-bar">
+            <span className="small muted">{num(fresh.total)}개</span>
+            <button type="button" className="wd-sort" onClick={() => setSheet('sort')}>
+              {SORT_OPTS.find(([o]) => o === f.sort)?.[1]} <IconChevronDown size={16} />
+            </button>
           </div>
         )}
 
         {error && !loading ? (
           <ErrorBox error={error} onRetry={() => setTick((t) => t + 1)} />
         ) : !fresh ? (
-          <div className="list" aria-busy>
+          <div className="wd-list" aria-busy>
             {Array.from({ length: 6 }, (_, i) => (
-              <div className="cell" key={i}>
-                <Skeleton variant="rectangle" width={56} height={42} radius={10} />
-                <div>
-                  <Skeleton variant="text" width="60%" height={18} />
-                  <Skeleton variant="text" width="40%" height={14} />
+              <div className="wd-sk" key={i}>
+                <div className="wd-mid">
+                  <Skeleton variant="text" width="55%" height={18} />
+                  <Skeleton variant="text" width="35%" height={14} />
                 </div>
-                <Skeleton variant="text" width={40} height={14} />
               </div>
             ))}
           </div>
@@ -141,36 +157,25 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
           <div className="empty">
             <Emoji name="study" size={120} />
             <h2>{filtered ? '찾는 단어가 없어요' : '단어가 아직 없어요'}</h2>
-            <p>{filtered ? '철자를 바꾸거나 다른 칩을 골라 보세요. 독일어·한국어·영어 뜻 모두 찾아요.' : '단어 시드를 넣으면 여기에 보여요.'}</p>
+            <p>{filtered ? '철자를 바꾸거나 거르기를 풀어 보세요. 독일어와 뜻 모두 찾아요.' : '단어를 넣으면 여기에 보여요.'}</p>
             {filtered && (
-              <Button variant="outlined" color="assistive" size="small" onClick={() => { setQ(''); setChip('all') }}>
-                검색 지우기
+              <Button variant="outlined" color="assistive" size="small" onClick={() => set({ ...EMPTY_FILTER, sort: f.sort })}>
+                거르기 풀기
               </Button>
             )}
           </div>
         ) : (
           <>
-            <ul className="list">
+            <ul className="wd-list">
               {fresh.items.map((it) => (
                 <li key={it.word.id}>
-                  <a className="cell" {...linkTo('/word/' + it.word.id)}>
-                    <div className="th">
-                      <WordImage word={it.word} />
+                  <a className={'wd-row' + (it.word.image ? ' has-img' : '')} {...linkTo('/word/' + it.word.id)}>
+                    {it.word.image && <Thumb id={it.word.id} />}
+                    <div className="wd-mid">
+                      <Lemma word={it.word} className="wd-w" />
+                      <div className="wd-m">{it.word.gloss_ko ?? '뜻 준비 중'}</div>
                     </div>
-                    <div className="mid">
-                      <div className="wl">
-                        <Lemma word={it.word} className="w" />
-                        <LevelBadge level={it.word.level} />
-                        {isWeak(it.card) && <WeakBadge />}
-                      </div>
-                      <div className="m">{it.word.gloss_ko ?? '뜻 준비 중'}</div>
-                    </div>
-                    <div className="r">
-                      <ContentBadge size="xsmall" variant="solid" color={it.card.state === 0 ? 'neutral' : 'accent'} accentColor="semantic.foreground.brand.primary">
-                        {STATE_LABEL[it.card.state]}
-                      </ContentBadge>
-                      <span>{sort === 'learned' && it.card.introduced_at ? `${fmtDay(studyDay(new Date(it.card.introduced_at)))} 배움` : dueText(it)}</span>
-                    </div>
+                    <Pill item={it} />
                   </a>
                 </li>
               ))}
@@ -182,7 +187,68 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
             )}
           </>
         )}
+
+        {n > 0 && (
+          <div className="wd-cta">
+            <Button fullWidth onClick={() => navigate('/drill?' + practiceParams(q, n))}>
+              {num(n)}개 연습
+            </Button>
+          </div>
+        )}
       </main>
+
+      <BottomSheet open={sheet !== null} onClose={() => setSheet(null)} title={sheet ? SHEET_TITLE[sheet] : ''}>
+        {sheet && (
+          <ul className="wd-opts" role="radiogroup" aria-label={SHEET_TITLE[sheet]}>
+            {OPTS[sheet].map(([v, label]) => {
+              const on = (f[sheet] as string) === v
+              return (
+                <li key={v}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    className={'wd-opt' + (on ? ' on' : '')}
+                    onClick={() => {
+                      set({ [sheet]: v } as Partial<WordsFilter>)
+                      setSheet(null)
+                    }}
+                  >
+                    {label as ReactNode}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </BottomSheet>
+      <AddWord key={add + '|' + url} open={addOpen} onClose={() => setAddOpen(false)} initialWord={add} initialUrl={url} />
     </>
   )
+}
+
+/** 그림이 있는 단어만 쓰는 작은 그림. 못 받으면 칸째 감춘다(머리글자 칸 없음) */
+function Thumb({ id }: { id: string }) {
+  const [broken, setBroken] = useState(false)
+  if (broken) return null
+  return <img className="wd-th" src={imgSrc(id)} alt="" loading="lazy" draggable={false} onError={() => setBroken(true)} />
+}
+
+/** 눈에 띌 때만: 제외 · 자주 틀림 · 오늘 복습 */
+function Pill({ item }: { item: DeckItem }) {
+  const { card } = item
+  if (card.suspended) return <ContentBadge size="xsmall" variant="outlined" color="neutral">제외</ContentBadge>
+  if (card.lapses >= 2)
+    return (
+      <ContentBadge size="xsmall" variant="outlined" color="accent" accentColor="semantic.foreground.negative.primary">
+        자주 틀림
+      </ContentBadge>
+    )
+  if (card.state !== 0 && dayDiff(card.due) <= 0)
+    return (
+      <ContentBadge size="xsmall" variant="solid" color="accent" accentColor="semantic.foreground.brand.primary">
+        오늘 복습
+      </ContentBadge>
+    )
+  return null
 }

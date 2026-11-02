@@ -109,7 +109,9 @@ test('두 DB: 읽기 경로 응답이 같다', async () => {
   const paths = [
     '/api/today', '/api/words', '/api/words?size=7&page=2', '/api/words?size=5&page=4', '/api/words?state=review', '/api/words?state=new&size=10',
     '/api/words?state=learning', '/api/words?state=done', '/api/words?sort=alpha', '/api/words?sort=learned', '/api/words?level=B2',
-    '/api/words?q=house', '/api/words?q=%C3%84rger', '/api/words?q=%25', '/api/word/w0021', '/api/word/w0004', '/api/stats', '/api/inbox', '/api/settings',
+    '/api/words?q=house', '/api/words?q=%C3%84rger', '/api/words?q=%25', '/api/words?q=aerger', '/api/words?q=die%20freu', '/api/words?q=%EB%9C%BB%201',
+    '/api/words?pos=verb', '/api/words?image=yes', '/api/words?image=no&size=5', '/api/words?weak=1&sort=weak', '/api/words?week=1', '/api/words?state=suspended',
+    '/api/words/counts', '/api/stats/records','/api/word/w0021', '/api/word/w0004', '/api/stats', '/api/inbox', '/api/settings',
     '/api/requests', '/api/changes', '/api/admin/runway', '/api/admin/review-queue', '/api/admin/keys', '/api/admin/images', '/api/admin/examples',
     '/api/admin/words-export', '/api/admin/news?since=2026-10-01', '/api/admin/review-stats', '/api/admin/requests?status=queued',
   ];
@@ -162,6 +164,10 @@ test('두 DB: 쓰기 경로 결과와 표가 같다', async (t) => {
     ['POST', '/api/changes/3/revert'],
     ['POST', '/api/notifications/1/open'],
     ['PUT', `/api/admin/image/${words[0]}?status=failed`],
+    ['POST', `/api/word/${words[3]}/suspend`, { suspended: true }],
+    ['GET', '/api/words?state=suspended'],
+    ['GET', `/api/word/${words[21]}`],
+    ['GET', '/api/stats/records'],
     ['GET', '/api/words?sort=learned'],
     ['GET', '/api/stats'],
     ['GET', '/api/admin/review-stats'],

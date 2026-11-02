@@ -1,0 +1,14 @@
+/* 단어 상세(v11) */
+.wdt-card { gap: var(--sp-3); overflow: hidden; }
+.wdt-img { display: block; width: calc(100% + 32px); margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) 0; aspect-ratio: 4 / 3; max-height: 280px; object-fit: cover; background: var(--g5); }
+.wdt-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.wdt-lemma { font-size: var(--fs-h1); line-height: 1.2; overflow-wrap: anywhere; }
+.wdt-mean { font-size: var(--fs-h3); font-weight: 700; }
+.wdt-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.wdt-plural { font-size: var(--fs-sm); color: var(--g60); }
+.wdt-ex { margin: 0; display: grid; gap: 4px; font-size: var(--fs-body); line-height: 1.6; }
+.wdt-ex .ko { color: var(--g60); font-size: var(--fs-sm); }
+.wdt-rec h3 { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--g60); }
+.wdt-rec-line { margin: 0; font-size: var(--fs-h3); font-weight: 700; color: var(--m70); font-variant-numeric: tabular-nums; }
+.wdt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.wdt-actions .k-btn { width: 100%; justify-content: center; }

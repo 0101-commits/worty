@@ -30,6 +30,8 @@ import { memo, clearMemo } from './memo.ts';
 import { meterDb, isBulkPath, overBudget, recordReads } from './budget.ts';
 import { drawSteps } from './draw-steps.ts';
 import { ciLike, crossJoin, dayOf, isPg, withDb } from './db.ts';
+import { foldSql, searchTerm } from '../shared/search.ts';
+import { POS_SET, WEAK_MIN, records, suspendWord, wordsCounts } from './stats.ts';
 import { MAX_IMAGE_BYTES, approvePending, deletePending, getPending, listPending, putPending, rejectPending, reviewPending, listReviewLog, deleteReviewLog } from './pending.ts';
 import {
   LIST_ORDER, wordsExport, addReport, addRequest, exampleWords, getNews, imageWords, insertWords, listChanges, listRequests, patchWords, putNews, putSkips,
@@ -166,10 +168,24 @@ const words: Handler = async ({ env, url }) => {
   const where: string[] = [];
   const binds: unknown[] = [];
   if (q) {
-    const like = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
+    // 표제어는 움라우트를 푼 글자로(ae = ä · ss = ß), 앞의 der/die/das/sich 는 뗀다(shared/search.ts). 뜻은 그대로 부분 일치
+    const esc = (t: string) => `%${t.replace(/[\\%_]/g, '\\$&')}%`;
     const lk = ciLike(env.DB);
-    where.push(`(w.lemma ${lk} ? ESCAPE '\\' OR w.gloss_ko ${lk} ? ESCAPE '\\' OR w.gloss_en ${lk} ? ESCAPE '\\')`);
-    binds.push(like, like, like);
+    where.push(`(${foldSql('w.lemma')} LIKE ? ESCAPE '\\' OR w.gloss_ko ${lk} ? ESCAPE '\\' OR w.gloss_en ${lk} ? ESCAPE '\\')`);
+    binds.push(esc(searchTerm(q)), esc(q), esc(q));
+  }
+  const pos = url.searchParams.get('pos');
+  if (pos && POS_SET.has(pos)) {
+    where.push('w.pos = ?');
+    binds.push(pos);
+  }
+  const image = url.searchParams.get('image');
+  if (image === 'yes') where.push("w.image_status = 'ok'");
+  else if (image === 'no') where.push("w.image_status <> 'ok'");
+  if (url.searchParams.get('weak') === '1') where.push(`c.lapses >= ${WEAK_MIN}`);
+  if (url.searchParams.get('week') === '1') {
+    where.push('c.introduced_at >= ?');
+    binds.push(studyDayStartUtc(addDays(studyDay(), -6)));
   }
   if (level === 'B1' || level === 'B2' || level === 'C1') {
     where.push('w.level = ?');
@@ -179,13 +195,16 @@ const words: Handler = async ({ env, url }) => {
   else if (state === 'learning') where.push('c.state IN (1, 3)');
   else if (state === 'review') where.push('c.state = 2'); // 오늘 만기 복습도 포함
   else if (state === 'done') where.push('c.state = 2 AND c.stability >= 30');
+  else if (state === 'suspended') where.push('c.suspended = 1');
   // 정렬(B3): 배운 날짜 = 첫 채점 시각(introduced_at) 최근 순, 가나다 = sich 뺀 표제어
   const sort = url.searchParams.get('sort');
   if (sort === 'learned') where.push('c.introduced_at IS NOT NULL');
   const order =
     sort === 'learned'
       ? 'c.introduced_at DESC, w.seq'
-      : sort === 'alpha'
+      : sort === 'weak'
+        ? 'c.lapses DESC, w.seq'
+        : sort === 'alpha'
         ? `${ALPHA_KEY}, w.seq`
         : LIST_ORDER;
   const cond = (extra: string[]) => (where.length || extra.length ? ' WHERE ' + [...where, ...extra].join(' AND ') : '');
@@ -286,16 +305,21 @@ const artikel: Handler = async ({ env, url }) => {
 };
 
 const wordDetail: Handler = async ({ env, params: [id] }) => {
-  const [row, revs] = await env.DB.batch([
+  const [row, revs, ox] = await env.DB.batch([
     env.DB.prepare(`SELECT ${ITEM_SELECT}, w.scene_en FROM words w JOIN cards c ON c.word_id = w.id WHERE w.id = ?`).bind(id),
     env.DB.prepare(
       'SELECT id, rating, reviewed_at, scheduled_days FROM reviews WHERE word_id = ? ORDER BY reviewed_at DESC LIMIT 20',
     ).bind(id),
+    env.DB.prepare(
+      'SELECT count(*) AS n, sum(CASE WHEN rating = 1 THEN 1 ELSE 0 END) AS x FROM reviews WHERE word_id = ? AND undone = 0',
+    ).bind(id),
   ]);
+  const oxRow = (ox.results[0] ?? {}) as { n?: number; x?: number | null };
+  const x = Number(oxRow.x ?? 0);
   const r = row.results[0];
   if (!r) throw new HttpError(404, 'not_found');
   const item = rowToItem(r as Record<string, unknown>);
-  return json({ ...item, scene_en: ((r as Record<string, unknown>).scene_en as string | null) ?? null, reviews: revs.results } as WordDetailResponse);
+  return json({ ...item, scene_en: ((r as Record<string, unknown>).scene_en as string | null) ?? null, reviews: revs.results, ox: { o: Number(oxRow.n ?? 0) - x, x } } as WordDetailResponse);
 };
 
 const stats: Handler = async ({ env }) => {
@@ -696,6 +720,9 @@ const routes: Route[] = [
   ['GET', /^\/api\/changes$/, getChanges],
   ['POST', /^\/api\/changes\/(\d+)\/revert$/, postRevert],
   ['GET', /^\/api\/stats$/, stats],
+  ['GET', /^\/api\/stats\/records$/, records],
+  ['GET', /^\/api\/words\/counts$/, wordsCounts],
+  ['POST', /^\/api\/word\/([\w-]+)\/suspend$/, suspendWord],
   ['GET', /^\/api\/inbox$/, inbox],
   ['POST', /^\/api\/notifications\/(\d+)\/open$/, openedNotification],
   ['POST', /^\/api\/notify\/later$/, notifyLater, true],

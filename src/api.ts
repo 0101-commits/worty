@@ -9,6 +9,7 @@ import type {
   PracticeResultsRequest,
   PracticeSaveResponse,
   PracticeScope,
+  RecordsResponse,
   ReportRequest,
   ReviewsRequest,
   ReviewsResponse,
@@ -17,6 +18,7 @@ import type {
   TodayResponse,
   WordDetailResponse,
   WordRequestsResponse,
+  WordsCountsResponse,
   WordsQuery,
   WordsResponse,
 } from '../shared/api.ts'
@@ -175,6 +177,12 @@ export const api = {
   /** 관사 1분(B5) */
   artikel: (n: number) => request<DeckListResponse>('GET', '/api/artikel?' + qs({ n })),
   stats: () => inflight.then(() => request<StatsResponse>('GET', '/api/stats')),
+  /** 기록 화면(v11): 이번 주 · 달력 · 자주 틀린 단어 · 복습 예정 · 진도 */
+  records: () => inflight.then(() => request<RecordsResponse>('GET', '/api/stats/records')),
+  /** 단어 화면 바로가기 칩 숫자 */
+  wordsCounts: () => request<WordsCountsResponse>('GET', '/api/words/counts'),
+  /** 단어 「제외」(카드 쉬게 하기) · 되돌리기 */
+  suspend: (id: string, suspended: boolean) => request<{ ok: boolean; suspended: boolean }>('POST', `/api/word/${encodeURIComponent(id)}/suspend`, { suspended }),
   inbox: () => request<InboxResponse>('GET', '/api/inbox'),
   /** 알림 링크(?n=)로 열었을 때 한 번(A4) */
   markOpened: (n: number) => request<{ ok: boolean }>('POST', `/api/notifications/${n}/open`),

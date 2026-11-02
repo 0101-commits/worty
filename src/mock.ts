@@ -8,12 +8,14 @@ import type {
   Rating,
   ReviewsRequest,
   Settings,
+  RecordsResponse,
   StatsResponse,
   TodayResponse,
   Word,
   WordRequestItem,
   WordsResponse,
 } from '../shared/api.ts'
+import { foldDe, searchTerm } from '../shared/search.ts'
 
 const DAY = 86_400_000
 const now = () => new Date()
@@ -99,7 +101,7 @@ const cards: Card[] = words.map((w, i) => {
     introduced_at: null,
     suspended: 0,
   }
-  if (i < 8) return { ...base, state: 2, due: ago(0.2), stability: 6 + i * 5, difficulty: 5, scheduled_days: 6 + i * 5, reps: 4 + i, lapses: i % 3, last_review: ago(6 + i * 5), introduced_at: ago(40) }
+  if (i < 8) return { ...base, state: 2, due: ago(0.2), stability: 6 + i * 5, difficulty: 5, scheduled_days: 6 + i * 5, reps: 4 + i, lapses: i % 4, last_review: ago(6 + i * 5), introduced_at: ago(40) }
   if (i < 12) return { ...base, state: 1, due: ago(0.1), stability: 1.2, difficulty: 6, learning_steps: 1, reps: 1, last_review: ago(0.5), introduced_at: ago(1) }
   if (i < 14) return { ...base, state: 2, due: later(3), stability: 44, difficulty: 4, scheduled_days: 44, reps: 9, last_review: ago(41), introduced_at: ago(120) }
   return base
@@ -136,10 +138,11 @@ const reviewsLog: Record<string, Array<{ id: number; rating: Rating; reviewed_at
 
 const item = (w: Word): DeckItem => ({ word: w, card: cards.find((c) => c.word_id === w.id)! })
 
-const norm = (s: string) => s.toLowerCase().replace(/ae/g, 'ä').replace(/oe/g, 'ö').replace(/ue/g, 'ü').replace(/ss/g, 'ß')
+const norm = foldDe
 
 function wordsList(q: URLSearchParams): WordsResponse {
-  const text = norm(q.get('q') ?? '')
+  const raw = q.get('q') ?? ''
+  const text = searchTerm(raw)
   const level = q.get('level') ?? 'all'
   const state = q.get('state') ?? 'all'
   const page = Number(q.get('page') ?? 1)
@@ -152,14 +155,39 @@ function wordsList(q: URLSearchParams): WordsResponse {
       if (state === 'new') return it.card.state === 0
       if (state === 'learning') return it.card.state === 1 || it.card.state === 3
       if (state === 'review') return it.card.state === 2
+      if (state === 'suspended') return it.card.suspended === 1
       return it.card.state === 2 && it.card.stability >= 30
     })
-    .filter((it) => !text || norm(it.word.lemma).includes(text) || (it.word.gloss_ko ?? '').includes(text))
+    .filter((it) => !q.get('pos') || q.get('pos') === 'all' || it.word.pos === q.get('pos'))
+    .filter((it) => !q.get('image') || (q.get('image') === 'yes') === it.word.image)
+    .filter((it) => q.get('weak') !== '1' || it.card.lapses >= 2)
+    .filter((it) => q.get('week') !== '1' || (it.card.introduced_at ?? '') > ago(7))
+    .filter((it) => !text || norm(it.word.lemma).includes(text) || (it.word.gloss_ko ?? '').includes(raw.trim()))
     .filter((it) => q.get('sort') !== 'learned' || it.card.introduced_at)
   const sort = q.get('sort')
   if (sort === 'learned') all.sort((a, b) => (b.card.introduced_at ?? '').localeCompare(a.card.introduced_at ?? ''))
+  if (sort === 'weak') all.sort((a, b) => b.card.lapses - a.card.lapses)
   if (sort === 'alpha') all.sort((a, b) => a.word.lemma.replace(/^sich /, '').toLowerCase().localeCompare(b.word.lemma.replace(/^sich /, '').toLowerCase()))
   return { total: all.length, page, size, items: all.slice((page - 1) * size, page * size) }
+}
+
+function records(): RecordsResponse {
+  const t = new Date(Date.now() + 5 * 3_600_000)
+  const todayStr = t.toISOString().slice(0, 10)
+  const days: Array<{ day: string; count: number }> = []
+  for (let d = 1; d <= t.getUTCDate(); d++) {
+    const day = todayStr.slice(0, 8) + String(d).padStart(2, '0')
+    days.push({ day, count: d % 7 === 3 ? 0 : d === t.getUTCDate() ? 9 : 4 + ((d * 7) % 15) })
+  }
+  const weak = words.map(item).filter((it) => it.card.lapses >= 2).sort((a, b) => b.card.lapses - a.card.lapses)
+  const forecast = [12, 7, 16, 9, 5, 11, 4].map((count, i) => ({ day: new Date(t.getTime() + i * DAY).toISOString().slice(0, 10), count }))
+  return {
+    week: { days: 5, reviews: 84, correct: 76 },
+    month: { month: todayStr.slice(0, 7), days },
+    weak: weak.map((it) => ({ id: it.word.id, lemma: it.word.lemma, pos: it.word.pos, gender: it.word.gender, level: it.word.level, gloss_ko: it.word.gloss_ko, x: it.card.lapses })),
+    forecast,
+    progress: { B1: { learned: 1120, total: 2400 }, B2: { learned: 322, total: 2800 }, C1: { learned: 40, total: 2700 } },
+  }
 }
 
 function stats(): StatsResponse {
@@ -262,10 +290,19 @@ export async function mockHandle(method: string, path: string, body?: unknown): 
   }
   if (p === '/api/reviews' && method === 'POST') return applyReviews(body as ReviewsRequest)
   if (p === '/api/words') return wordsList(url.searchParams)
+  if (p === '/api/words/counts') return { weak: cards.filter((c) => c.lapses >= 2).length, week: cards.filter((c) => (c.introduced_at ?? '') > ago(7)).length }
+  if (p === '/api/stats/records') return records()
+  if (/^\/api\/word\/[\w-]+\/suspend$/.test(p) && method === 'POST') {
+    const c = cards.find((x) => x.word_id === p.split('/')[3])
+    if (c) c.suspended = (body as { suspended: boolean }).suspended ? 1 : 0
+    return { ok: true, suspended: Boolean((body as { suspended: boolean }).suspended) }
+  }
   if (p.startsWith('/api/word/')) {
     const w = words.find((x) => x.id === decodeURIComponent(p.slice('/api/word/'.length)))
     if (!w) throw new Error('없는 단어')
-    return { ...item(w), reviews: reviewsLog[w.id] ?? [] }
+    const revs = reviewsLog[w.id] ?? []
+    const x = revs.filter((r) => r.rating === 1).length
+    return { ...item(w), reviews: revs, ox: { o: Math.max(revs.length, item(w).card.reps) - x, x } }
   }
   if (p === '/api/stats') return stats()
   if (p === '/api/drill') {
