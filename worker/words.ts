@@ -149,7 +149,7 @@ export async function insertWords(db: D1Database, items: Array<Record<string, un
 /** 그림 다시 검사용(daily.mjs --recheck): 그림이 올라간 단어. 질의 한 번 —
  *  /api/words 를 쪽마다 넘기면 쪽마다 count(*)·정렬로 표 전체를 읽어 하루 무료 행 읽기(5M)를 넘겼다(2026-10-19, 11.5M) */
 export async function imageWords(db: D1Database) {
-  const r = await db.prepare("SELECT id, lemma, gender, gloss_ko FROM words WHERE image_status = 'ok' ORDER BY id").all();
+  const r = await db.prepare("SELECT id, lemma, gender, gloss_ko, pos, level FROM words WHERE image_status = 'ok' ORDER BY id").all();
   return { items: r.results.map(plain) };
 }
 

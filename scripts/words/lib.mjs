@@ -2,6 +2,7 @@
 // 시험: tests/words-lib.test.mjs · 설계: docs/superpowers/specs/2026-10-15-word-review-news-design.md
 import { HIT_NONE, findWord, hitSpans } from '../../shared/cloze.ts';
 import { REQ_TEXT } from '../../shared/request.ts';
+import { SCENE_MAX, SCENE_RULE_SHORT, bannedIn, classifyWord, roleHint, sceneShapeOk } from '../scene.mjs';
 
 /** JSON 에서 읽은 객체의 자기 칸만(constructor·__proto__ 같은 이름이 낱말로 와도 안전) */
 export const own = (o, k) => (o && Object.hasOwn(o, k) ? o[k] : undefined);
@@ -198,12 +199,19 @@ export function pickBacklog({ backlog, index, have, skips, max = 50 }) {
 // ---------- Claude 프롬프트 · 답 검사 ----------
 
 const s = (v) => (typeof v === 'string' ? v.trim() : '');
+/** 프롬프트 항목에 낱말 종류 힌트(class_hint)와 직업 명사 힌트(role_hint)를 붙인다(G1) */
+const withSceneHint = (w) => {
+  const lemma = w.lemma ?? w.word ?? '';
+  const pos = w.pos ?? null;
+  const hint = pos ? { class_hint: classifyWord({ lemma, pos, gender: w.gender }), ...(roleHint(lemma) ? { role_hint: roleHint(lemma) } : {}) } : {};
+  return { ...w, ...hint };
+};
 const POS = new Set(['noun', 'verb', 'adj', 'adv', 'prep', 'conj', 'pron', 'num', 'phrase', 'other']);
 const RULES = [
   '  · gloss_ko: 짧은 한국어 뜻 1~3개, 쉼표 구분, 20자 이내(명사는 관사 없이 명사형, 동사는 ~하다/되다 형, 형용사는 ~한/~적인 형, 부사는 ~게/~히 형). 오스트리아·스위스 어휘는 뜻에 (오) (스) 표기.',
   "  · example_de: natural German sentence at the item's level, ≤70 chars, contains the headword (inflected/separated forms fine), everyday/work/news context.",
   '  · example_ko: 자연스러운 한국어 번역, 40자 이내, ~해요체.',
-  '  · scene_en: ONE English line, ≤25 words, starting with "Borti " — a concrete visual scene where the mascot Borti (a chubby white puppy with tan floppy ears) acts out the meaning with a concrete prop or action. No text, letters, numbers, signs, or logos. Only Borti unless a second character is needed ("another puppy"). Keep it gentle and family-friendly even for crime/violence words (show it symbolically: e.g. a detective magnifying glass, a broken vase).',
+  `  · scene_en: ${SCENE_RULE_SHORT}`,
 ].join('\n');
 
 /** 카드 글 쓰기(keep 판정 포함). update.mjs 의 예전 writeContent 프롬프트와 같은 규칙 */
@@ -215,7 +223,7 @@ Return exactly one object per input item, same order, key copied unchanged.
 ${RULES}
 - Not useful → {"key", "keep": false, "reason": "짧은 사유"}. Use false for: vulgar/sexual/slang words, proper names and nationality/ethnic labels, English loan slang typical of dubbed films (Bingo, Amigo), archaic words, very narrow jargon, words that only make sense in film dialogue (Samurai, Satan, Pirat). News/daily/work vocabulary is keep:true even if it is about crime or conflict (Mörder, Verhör, Haftbefehl). When unsure → true. Words you rate A1, A2 or C2 are outside this app's B1–C1 range: the code rejects them.
 Output ONLY a JSON array (no prose, no code fence) with exactly ${list.length} objects.
-Items: ${JSON.stringify(list)}`;
+Items: ${JSON.stringify(list.map(withSceneHint))}`;
 }
 
 const CEFR6 = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -237,8 +245,10 @@ export function acceptContent(arr, list) {
       res.push({ key: o.key, keep: false, reason: `AI 등급 ${o.cefr}(B1~C1 밖)` });
       continue;
     }
-    const c = { key: o.key, keep: true, cefr: o.cefr, gloss_ko: s(o.gloss_ko).slice(0, 40), example_de: s(o.example_de), example_ko: s(o.example_ko).slice(0, 80), scene_en: s(o.scene_en).slice(0, 300) };
-    if (c.gloss_ko && c.example_de && c.example_de.length <= 70 && c.example_ko && c.scene_en.startsWith('Borti ')) res.push(c);
+    const c = { key: o.key, keep: true, cefr: o.cefr, gloss_ko: s(o.gloss_ko).slice(0, 40), example_de: s(o.example_de), example_ko: s(o.example_ko).slice(0, 80), scene_en: s(o.scene_en).slice(0, SCENE_MAX) };
+    // 11-02 v11: 장면은 「Borti …」 또는 두 칸(「Two panels: …」) 꼴이고 금지 소품·기호가 없어야 한다 — 어기면 글만 받고 장면은 비움(그림 직전 daily.mjs 가 새로 씀)
+    if (!(sceneShapeOk(c.scene_en) && !bannedIn(c.scene_en).length)) c.scene_en = null;
+    if (c.gloss_ko && c.example_de && c.example_de.length <= 70 && c.example_ko) res.push(c);
   }
   return res;
 }
@@ -255,7 +265,7 @@ Return exactly one object per input item, same order, id copied unchanged.
 ${RULES}
 - Not usable (gibberish, a person or place name, not German) → {"id", "keep": false, "reason": "짧은 사유"}.
 Output ONLY a JSON array (no prose, no code fence) with exactly ${list.length} objects.
-Items: ${JSON.stringify(list)}`;
+Items: ${JSON.stringify(list.map(withSceneHint))}`;
 }
 
 /** requestPrompt 답 → Map(id → 값). 모양이 틀린 줄은 버린다(다음 날 다시) */
@@ -275,7 +285,7 @@ export function acceptRequests(arr, ids) {
       level: ['B1', 'B2', 'C1'].includes(o.level) ? o.level : 'B2',
       gloss_ko: s(o.gloss_ko).slice(0, 40), example_de: s(o.example_de), example_ko: s(o.example_ko).slice(0, 80), scene_en: s(o.scene_en).slice(0, 300),
     };
-    if (REQ_TEXT.test(c.lemma) && POS.has(c.pos) && c.gloss_ko && c.example_de && c.example_de.length <= 70 && c.example_ko && c.scene_en.startsWith('Borti ')) out.set(o.id, c);
+    if (REQ_TEXT.test(c.lemma) && POS.has(c.pos) && c.gloss_ko && c.example_de && c.example_de.length <= 70 && c.example_ko) out.set(o.id, c);
   }
   return out;
 }

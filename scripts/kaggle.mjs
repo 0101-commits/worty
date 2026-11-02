@@ -13,8 +13,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { REF_FILE, imagePrompt } from './style.mjs';
+import { stripPin } from './scene.mjs';
 import { buildPrompt } from './judge.mjs';
-import { pixelStats, ocrChars, verdict } from './imgcheck.mjs';
+import { pixelStats, ocrChars, verdict, frameStats } from './imgcheck.mjs';
 import { ledgerConfig, loadLedger, saveLedger, recordDraw, recordAuto, recordJudge } from './ledger.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -106,11 +107,11 @@ function strictPrompts(label, meaning, scene) {
 """{DESC}"""
 ${buildPrompt([{ n: 1, word: label, meaning_ko: meaning }])}
 STRICT EXTRA CHECKS (the description above is evidence; the picture itself decides):
-The image prompt asked for this scene: "${scene}".
+The image prompt asked for this scene: "${stripPin(scene)}".
 - key_visible: true only if the ONE object or action that carries the meaning of the word is clearly drawn and recognizable (large, not tiny, not merely implied). A hat, accessory or generic prop that does not by itself express the meaning counts as NOT visible. Check each key element of the scene against the description.
 - guessable: true only if a learner who sees only the picture (no word) could single out THIS word among several unrelated words. Generic pictures (the puppy just standing, sitting, smiling or wearing something, holding a vague object) fit many words → false.
 - body_ok: true only if no animal has wrong counts of legs/paws, ears, eyes, tails or heads and none of the body problems listed above.
-- text_ok: false if any letters or numbers are drawn (symbols ? ! heart are fine).
+- text_ok: false if any letters or numbers are drawn, or the picture has a frame or border (one thin divider in the middle of a two-panel picture is fine), or it relies on symbols (? ! check marks X hearts).
 FINAL OUTPUT FORMAT (replaces the format asked above): ONLY a JSON array with exactly 1 item, "why" FIRST (max 20 words: what is drawn for the key element and what is missing), then the flags, "ok" LAST: [{"n":1,"why":"…","key_visible":true,"guessable":true,"body_ok":true,"text_ok":true,"ok":true}]. ok must be false when any of key_visible, guessable, body_ok, text_ok is false.`;
   return { desc_prompt: desc, check_prompt: check };
 }
@@ -257,7 +258,7 @@ async function collect(dir) {
   const chars = ocrChars(withImg.map((r) => r.file));
   for (const [i, r] of withImg.entries()) {
     r.stats = await pixelStats(r.buf);
-    r.why = verdict(r.stats, chars[i]);
+    r.why = verdict(r.stats, chars[i], await frameStats(r.buf));
     sum.auto_checked++;
     if (!r.why.length) sum.auto_ok++;
   }

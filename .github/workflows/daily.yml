@@ -89,8 +89,16 @@ jobs:
               git show "$main:.data/restyle.json" > .data/.rs-main.json 2>/dev/null || cp .data/.rs-base.json .data/.rs-main.json
               node scripts/merge-restyle.mjs .data/.rs-base.json .data/.rs-main.json .data/restyle.json
             fi
+            # v11: 장면 색인 · 그림 해시 · 사람 결정 — main 것 위에 이번 실행 것을 얹는다(scripts/merge-state.mjs)
+            for f in scenes dhash image-feedback; do
+              if [ -f ".data/$f.json" ]; then
+                git show "$main:.data/$f.json" > ".data/.$f-main.json" 2>/dev/null || echo 'null' > ".data/.$f-main.json"
+                node scripts/merge-state.mjs ".data/.$f-main.json" ".data/$f.json"
+                rm -f ".data/.$f-main.json"
+              fi
+            done
             git reset -q "$main"
-            for f in .data/restyle.json .data/images-done.json .data/draw-day.json .data/ledger.json; do
+            for f in .data/restyle.json .data/images-done.json .data/draw-day.json .data/ledger.json .data/scenes.json .data/dhash.json .data/image-feedback.json; do
               if [ -f "$f" ]; then git add -f "$f"; else git rm -q --cached --ignore-unmatch "$f"; fi
             done
             git diff --cached --quiet && exit 0
