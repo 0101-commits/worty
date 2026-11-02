@@ -147,21 +147,33 @@ try {
         table.push({ route: '온보딩 O2', vp: '390', light: ook ? 'ok' : 'FAIL', dark: '-', sw: o2 ? '웹후크 칸 있음' : '없음' })
       }
 
-      // 단어 칩 C1: 7개 칩 줄, 누르면 C1 단어만
+      // 단어(v11): 꼬리표 4개 · 레벨 시트에서 C1 · 검색(ae = ä, 앞 관사 무시) · 자주 틀림 바로가기 · 「N개 연습」
       if (vp.name === '390' && scheme === 'light') {
         errors = []
         await page.goto(BASE + '#/words', { waitUntil: 'networkidle' })
         await page.reload({ waitUntil: 'networkidle' })
-        await page.waitForSelector('.list .cell')
-        const chipRow = await page.locator('.chips').evaluate((el) => ({ n: el.children.length, sw: el.scrollWidth, cw: el.clientWidth }))
-        await page.getByRole('button', { name: 'C1', exact: true }).click()
-        await page.waitForFunction(() => document.querySelectorAll('.list [data-level]').length > 0 && [...document.querySelectorAll('.list [data-level]')].every((b) => b.getAttribute('data-level') === 'C1'), null, { timeout: 3000 }).catch(() => undefined)
-        const levels = await page.locator('.list [data-level]').evaluateAll((els) => els.map((e) => e.getAttribute('data-level')))
+        await page.waitForSelector('.wd-row')
+        const tags = await page.locator('.wd-tags').evaluate((el) => ({ n: el.children.length, sw: el.scrollWidth, cw: el.clientWidth }))
+        const all = await page.locator('.wd-row').count()
+        await page.locator('.wd-tags button').nth(1).click()
+        await page.getByRole('radio', { name: 'C1' }).click()
+        await page.waitForFunction((n) => !document.querySelector('.wd-list[aria-busy]') && document.querySelectorAll('.wd-row').length > 0 && document.querySelectorAll('.wd-row').length < n, all, { timeout: 3000 }).catch(() => undefined)
+        const c1 = await page.locator('.wd-row').count()
+        await page.locator('.wd-tags button').nth(1).click()
+        await page.getByRole('radio', { name: '전체' }).click()
+        await page.getByLabel('단어 검색').fill('die gebaeude')
+        await page.waitForFunction(() => !document.querySelector('.wd-list[aria-busy]') && document.querySelectorAll('.wd-row').length === 1, null, { timeout: 3000 }).catch(() => undefined)
+        const found = await page.locator('.wd-row').allTextContents()
+        await page.getByLabel('단어 검색').fill('')
+        await page.getByRole('button', { name: /^자주 틀림/ }).click()
+        await page.waitForFunction((n) => !document.querySelector('.wd-list[aria-busy]') && document.querySelectorAll('.wd-row').length > 0 && document.querySelectorAll('.wd-row').length < n, all, { timeout: 3000 }).catch(() => undefined)
+        const weak = await page.locator('.wd-row').count()
+        const cta = await page.getByRole('button', { name: /개 연습$/ }).count()
         const psw = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-        await page.screenshot({ path: join(SHOTS, 'words-c1-390.png'), fullPage: true })
-        const cok = chipRow.n === 7 && levels.length > 0 && levels.every((l) => l === 'C1') && psw <= 0 && errors.length === 0
-        if (!cok) fail(`단어 칩 C1: 칩 ${chipRow.n} · 결과 레벨 ${levels.join(',')} · 페이지 넘침 ${psw}`)
-        table.push({ route: '단어 칩 C1', vp: '390', light: cok ? 'ok' : 'FAIL', dark: '-', sw: `칩 ${chipRow.n} (${chipRow.sw > chipRow.cw ? '가로 스크롤' : '한 줄에 다 보임'}) · C1 ${levels.length}개` })
+        await page.screenshot({ path: join(SHOTS, 'words-filter-390.png'), fullPage: true })
+        const cok = tags.n === 4 && c1 > 0 && c1 < all && found.length === 1 && /Gebäude/.test(found[0]) && weak > 0 && weak < all && cta === 1 && psw <= 0 && errors.length === 0
+        if (!cok) fail(`단어 거르기: 꼬리표 ${tags.n} · 전체 ${all} · C1 ${c1} · 검색 ${found.join('|')} · 자주 틀림 ${weak} · 연습 버튼 ${cta} · 넘침 ${psw}${errors.length ? ' · 콘솔 오류 ' + errors.join(' | ') : ''}`)
+        table.push({ route: '단어 거르기', vp: '390', light: cok ? 'ok' : 'FAIL', dark: '-', sw: `꼬리표 ${tags.n} · 전체 ${all} → C1 ${c1} · 자주 틀림 ${weak}` })
       }
 
       // 덱 밀기: 390 · light 에서 오른쪽으로 한 번

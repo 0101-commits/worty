@@ -1,6 +1,6 @@
-// 「단어 넣기」: 기사에서 만난 단어(활용형도 됨) + 링크 → 다음 새벽 작업이 카드로 만들어 맨 앞에. 최근 넣은 10개 상태.
+// 「단어 넣기」(단어 화면 ＋ → 바텀시트): 기사에서 만난 단어(활용형도 됨) + 링크 → 다음 새벽 작업이 카드로 만들어 맨 앞에. 최근 넣은 10개 상태.
 import { useEffect, useState } from 'react'
-import { Button, ContentBadge, TextField } from './k/index.tsx'
+import { BottomSheet, Button, ContentBadge, TextField } from './k/index.tsx'
 import type { RequestStatus, WordRequestItem } from '../shared/api.ts'
 import { REQ_TEXT } from '../shared/request.ts'
 import { api, errorText } from './api.ts'
@@ -9,8 +9,7 @@ import { useToaster } from './ui.tsx'
 
 const STATUS: Record<RequestStatus, string> = { queued: '내일 아침 전', added: '카드 만듦', exists: '이미 있음 · 앞으로', rejected: '제외' }
 
-export function AddWord({ initialWord = '', initialUrl = '', initialOpen = false }: { initialWord?: string; initialUrl?: string; initialOpen?: boolean }) {
-  const [open, setOpen] = useState(initialOpen)
+export function AddWord({ open, onClose, initialWord = '', initialUrl = '' }: { open: boolean; onClose: () => void; initialWord?: string; initialUrl?: string }) {
   const [word, setWord] = useState(initialWord)
   const [url, setUrl] = useState(initialUrl)
   const [busy, setBusy] = useState(false)
@@ -36,15 +35,8 @@ export function AddWord({ initialWord = '', initialUrl = '', initialOpen = false
       setBusy(false)
     }
   }
-  if (!open)
-    return (
-      <Button size="small" variant="outlined" color="primary" onClick={() => setOpen(true)}>
-        단어 넣기
-      </Button>
-    )
   return (
-    <section className="box wh addword" aria-label="단어 넣기">
-      <b>기사에서 만난 단어 넣기</b>
+    <BottomSheet open={open} onClose={onClose} title="기사에서 만난 단어 넣기">
       <TextField placeholder="예: Ermittlung · ermittelte" aria-label="넣을 단어" lang="de" value={word} status={w && !ok ? 'negative' : 'normal'} onChange={(e) => setWord(e.target.value)} />
       <TextField type="url" inputMode="url" placeholder="기사 링크(선택)" aria-label="기사 링크" value={url} onChange={(e) => setUrl(e.target.value)} />
       {w && !ok && <p className="small muted">글자로 된 단어 하나(60자 이내)만 넣어 주세요.</p>}
@@ -61,6 +53,6 @@ export function AddWord({ initialWord = '', initialUrl = '', initialOpen = false
           ))}
         </ul>
       )}
-    </section>
+    </BottomSheet>
   )
 }

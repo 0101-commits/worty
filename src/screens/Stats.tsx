@@ -1,121 +1,138 @@
-// 기록: 벤토 4 · 12주 열기 지도 · 상태 막대 · 레벨 수
-import { Skeleton } from '../k/index.tsx'
-import type { StatsResponse } from '../../shared/api.ts'
+// 기록(v11): 이번 주 한 줄 요약 → 이달 달력 → 자주 틀린 단어 → 복습 예정 → 진도
+import { Button, Card, ProgressBar, Skeleton } from '../k/index.tsx'
+import type { RecordsResponse } from '../../shared/api.ts'
 import { api } from '../api.ts'
 import { fmtDay, num } from '../format.ts'
 import { useAsync } from '../hooks.ts'
-import { CountUp, Emoji, ErrorBox, LEVELS, LevelBadge, Top } from '../ui.tsx'
-
-const STATE_ROWS: Array<[keyof StatsResponse['by_state'], string]> = [
-  ['new', '새 단어'],
-  ['learning', '학습 중'],
-  ['review', '복습'],
-  ['relearning', '다시 학습'],
-]
+import { linkTo, navigate } from '../router.ts'
+import { EMPTY_FILTER, practiceParams } from '../wordsFilter.ts'
+import { ErrorBox, LEVELS, LevelBadge, Lemma, Top } from '../ui.tsx'
+import './stats.css'
 
 export default function Stats() {
-  const r = useAsync(() => api.stats(), [])
+  const r = useAsync(() => api.records(), [])
   const d = r.data
   return (
     <>
       <Top title="기록" actions />
-      <main className="page">
+      <main className="page st-page">
         {r.error ? (
           <ErrorBox error={r.error} onRetry={r.reload} />
         ) : !d ? (
           <>
-            <div className="bento">
-              {[0, 1, 2, 3].map((i) => <Skeleton key={i} variant="rectangle" width="100%" height={84} radius={16} />)}
-            </div>
-            <Skeleton variant="rectangle" width="100%" height={180} radius={16} />
+            <Skeleton variant="text" width="70%" height={28} />
+            <Skeleton variant="rectangle" width="100%" height={200} radius={12} />
+            <Skeleton variant="rectangle" width="100%" height={160} radius={12} />
           </>
         ) : (
-          <StatsBody d={d} />
+          <Body d={d} />
         )}
       </main>
     </>
   )
 }
 
-function StatsBody({ d }: { d: StatsResponse }) {
-  const todayCount = d.heat.at(-1)?.count ?? 0
-  const stateTotal = Object.values(d.by_state).reduce((a, b) => a + b, 0) || 1
-  const byLevel = (lv: (typeof LEVELS)[number]) => d.by_level[lv] ?? 0 // 서버가 C1 을 아직 안 주면 0
-  const levelMax = Math.max(1, ...LEVELS.map(byLevel))
+function summary(w: RecordsResponse['week']): string {
+  if (w.reviews === 0) return '이번 주는 아직 기록이 없어요'
+  return `이번 주 ${w.days}일 · ${num(w.reviews)}장 · 정답률 ${Math.round((w.correct / w.reviews) * 100)}%`
+}
+
+function Body({ d }: { d: RecordsResponse }) {
+  const monthNo = Number(d.month.month.slice(5))
   return (
     <>
-      <div className="bento">
-        <div className="b">
-          <div className="v"><CountUp value={todayCount} /><small>번</small></div>
-          <div className="l">오늘 채점</div>
-        </div>
-        <div className="b">
-          <div className="v"><CountUp value={d.due_tomorrow} /><small>장</small></div>
-          <div className="l">내일 예정</div>
-        </div>
-        <div className={'b' + (d.streak_days >= 3 ? ' party' : '')}>
-          <div className="v"><CountUp value={d.streak_days} /><small>일</small></div>
-          <div className="l">연속 일수</div>
-          {d.streak_days >= 3 && <Emoji name="party" size={48} className="b-emoji" />}
-        </div>
-        <div className="b">
-          <div className="v"><CountUp value={d.images} /><small>/ {num(d.total_words)}</small></div>
-          <div className="l">그림 있는 단어</div>
-        </div>
-      </div>
+      <h2 className="st-sum">{summary(d.week)}</h2>
 
-      <section className="box wh pad">
-        <div className="row-h">
-          <h3>최근 12주</h3>
-          <span className="small muted">{num(d.heat.reduce((a, h) => a + h.count, 0))}번 채점</span>
+      <Card>
+        <div className="st-row-h">
+          <h3>{monthNo}월</h3>
+          <span className="small muted">{num(d.month.days.reduce((a, x) => a + x.count, 0))}장</span>
         </div>
-        <Heat heat={d.heat} />
-        <div className="legend small muted" aria-hidden>
-          적음 <i /> <i className="l1" /> <i className="l2" /> <i className="l3" /> <i className="l4" /> 많음
-        </div>
-      </section>
+        <Calendar days={d.month.days} />
+      </Card>
 
-      <section className="box wh pad">
-        <h3>카드 상태</h3>
-        <div className="bars">
-          {STATE_ROWS.map(([k, label]) => (
-            <div className="bar-row" key={k}>
-              <span>{label}</span>
-              <div className="bar"><i style={{ width: `${(d.by_state[k] / stateTotal) * 100}%` }} /></div>
-              <b className="num">{num(d.by_state[k])}</b>
-            </div>
-          ))}
-        </div>
-      </section>
+      <Card>
+        <h3>자주 틀린 단어</h3>
+        {d.weak.length === 0 ? (
+          <p className="small muted">아직 자주 틀린 단어가 없어요.</p>
+        ) : (
+          <>
+            <ul className="st-weak">
+              {d.weak.map((w) => (
+                <li key={w.id}>
+                  <a className="st-weak-row" {...linkTo('/word/' + w.id)}>
+                    <span className="st-weak-w">
+                      <Lemma word={w} />
+                      <span className="st-weak-m">{w.gloss_ko}</span>
+                    </span>
+                    <b className="st-x">X {w.x}</b>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <Button variant="outlined" color="primary" fullWidth onClick={() => navigate('/drill?' + practiceParams({ ...EMPTY_FILTER, weak: true }, 10))}>
+              모아서 연습
+            </Button>
+          </>
+        )}
+      </Card>
 
-      <section className="box wh pad">
-        <h3>레벨</h3>
-        <div className="bars">
-          {LEVELS.map((lv) => (
-            <div className="bar-row" key={lv}>
-              <span><LevelBadge level={lv} /></span>
-              <div className={'bar lv-' + lv}><i style={{ width: `${(byLevel(lv) / levelMax) * 100}%` }} /></div>
-              <b className="num">{num(byLevel(lv))}</b>
-            </div>
-          ))}
+      <Card>
+        <h3>복습 예정</h3>
+        <Forecast days={d.forecast} />
+      </Card>
+
+      <Card>
+        <h3>진도</h3>
+        <div className="st-prog">
+          {LEVELS.map((lv) => {
+            const p = d.progress[lv]
+            return (
+              <div className="st-prog-row" key={lv}>
+                <LevelBadge level={lv} />
+                <ProgressBar value={p.total ? p.learned / p.total : 0} label={`${lv} 진도`} />
+                <span className="st-prog-n num">{num(p.learned)} / {num(p.total)}</span>
+              </div>
+            )
+          })}
         </div>
-      </section>
+      </Card>
     </>
   )
 }
 
-/** 열 = 주(월~일), 칸 = 하루. 색은 그 기간 최댓값 대비 4단계 cyan. 구조는 21st.dev heat-calendar 참고. */
-function Heat({ heat }: { heat: StatsResponse['heat'] }) {
-  if (!heat.length) return null
-  const max = Math.max(1, ...heat.map((h) => h.count))
-  const first = new Date(heat[0].day + 'T00:00:00Z').getUTCDay() // 0 = 일요일
-  const pad = (first + 6) % 7 // 월요일 시작
-  const cols = Math.ceil((pad + heat.length) / 7)
-  const level = (c: number) => (c === 0 ? '' : c <= max * 0.25 ? 'l1' : c <= max * 0.5 ? 'l2' : c <= max * 0.75 ? 'l3' : 'l4')
+const DOW = ['월', '화', '수', '목', '금', '토', '일']
+
+/** 이번 달 달력(월요일 시작). 칸 색은 이달 최댓값 대비 4단계 민트 */
+function Calendar({ days }: { days: RecordsResponse['month']['days'] }) {
+  if (!days.length) return null
+  const max = Math.max(1, ...days.map((x) => x.count))
+  const pad = (new Date(days[0].day + 'T00:00:00Z').getUTCDay() + 6) % 7
+  const lv = (c: number) => (c === 0 ? '' : c <= max * 0.25 ? 'l1' : c <= max * 0.5 ? 'l2' : c <= max * 0.75 ? 'l3' : 'l4')
   return (
-    <div className="heat" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }} role="img" aria-label={`최근 ${heat.length}일 채점 기록`}>
-      {Array.from({ length: pad }, (_, i) => <i key={'p' + i} className="pad" />)}
-      {heat.map((h) => <i key={h.day} className={level(h.count)} title={`${fmtDay(h.day)} · ${h.count}번`} />)}
+    <div className="st-cal" role="img" aria-label="이번 달 채점 기록">
+      {DOW.map((x) => <span key={x} className="st-dow">{x}</span>)}
+      {Array.from({ length: pad }, (_, i) => <i key={'p' + i} className="st-pad" />)}
+      {days.map((x) => (
+        <i key={x.day} className={lv(x.count)} title={`${fmtDay(x.day)} · ${x.count}장`}>{Number(x.day.slice(8))}</i>
+      ))}
+    </div>
+  )
+}
+
+/** 앞으로 7일 막대. 오늘 · 내일 · 모레 · 그 뒤는 날짜 */
+function Forecast({ days }: { days: RecordsResponse['forecast'] }) {
+  const max = Math.max(1, ...days.map((x) => x.count))
+  const name = (i: number, day: string) => (i === 0 ? '오늘' : i === 1 ? '내일' : i === 2 ? '모레' : fmtDay(day))
+  return (
+    <div className="st-fc" role="img" aria-label={days.map((x, i) => `${name(i, x.day)} ${x.count}장`).join(', ')}>
+      {days.map((x, i) => (
+        <div className="st-fc-col" key={x.day}>
+          <b className="num">{x.count}</b>
+          <span className="st-fc-bar">{x.count > 0 && <i style={{ height: `${(x.count / max) * 100}%` }} />}</span>
+          <span className="st-fc-d">{name(i, x.day)}</span>
+        </div>
+      ))}
     </div>
   )
 }

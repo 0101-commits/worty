@@ -112,9 +112,17 @@ export interface ReviewsResponse {
 export interface WordsQuery {
   q?: string;
   level?: Level | 'all';
-  state?: 'all' | 'new' | 'learning' | 'review' | 'done';
+  state?: 'all' | 'new' | 'learning' | 'review' | 'done' | 'suspended';
+  /** 품사 */
+  pos?: Pos | 'all';
+  /** yes = 그림 있는 단어 · no = 없는 단어 */
+  image?: 'yes' | 'no';
+  /** 1 = 자주 틀림(잊은 횟수 2 이상) */
+  weak?: 1;
+  /** 1 = 이번 주(최근 7학습일)에 처음 본 단어 */
+  week?: 1;
   /** seq = 학습 순서(기본) · learned = 배운 날짜 최근 순(아직 안 배운 단어 빠짐) · alpha = 가나다(sich 뺀 표제어) */
-  sort?: 'seq' | 'learned' | 'alpha';
+  sort?: 'seq' | 'learned' | 'alpha' | 'weak';
   page?: number;
   size?: number;
   /** 1 = 총수를 안 센다(꽉 찬 쪽이면 total 은 지금까지 본 수). 목록 연습처럼 total 을 안 쓰는 호출용 */
@@ -164,6 +172,8 @@ export interface WordDetailResponse extends DeckItem {
   /** 그림 장면(영어 한 줄). 매일 작업이 새 장면을 못 쓰면 이것으로 그린다 */
   scene_en: string | null;
   reviews:Array<{ id: number; rating: Rating; reviewed_at: string; scheduled_days: number }>;
+  /** 채점 횟수: X = 다시(틀림) · O = 그 밖(맞힘). 되돌린 채점은 뺀다 */
+  ox: { o: number; x: number };
 }
 
 /** GET /api/stats */
@@ -176,6 +186,35 @@ export interface StatsResponse {
   heat: Array<{ day: string; count: number }>;
   streak_days: number;
   due_tomorrow: number;
+}
+
+/** GET /api/words/counts — 단어 화면 바로가기 칩의 숫자 */
+export interface WordsCountsResponse {
+  weak: number;
+  week: number;
+}
+
+/** GET /api/stats/records — 기록 화면(v11) */
+export interface RecordsWeakWord {
+  id: string;
+  lemma: string;
+  pos: Pos;
+  gender: string | null;
+  level: Level;
+  gloss_ko: string | null;
+  /** 잊은(X) 횟수 */
+  x: number;
+}
+export interface RecordsResponse {
+  /** 이번 주(월요일부터 오늘까지, 학습일 기준) */
+  week: { days: number; reviews: number; correct: number };
+  /** 이번 달 달력: 학습일 → 채점 수(1일부터 오늘까지) */
+  month: { month: string; days: Array<{ day: string; count: number }> };
+  weak: RecordsWeakWord[];
+  /** 앞으로 7일(오늘부터) 복습할 카드 수. 밀린 카드는 오늘에 넣는다 */
+  forecast: Array<{ day: string; count: number }>;
+  /** 레벨별 배운 수 / 전체 */
+  progress: Record<Level, { learned: number; total: number }>;
 }
 
 /** GET /api/inbox */

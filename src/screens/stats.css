@@ -1,0 +1,41 @@
+/* 기록 화면(v11). 학습·진도 표시는 민트 */
+.st-sum { margin: 4px 0 0; font-size: var(--fs-h2); line-height: 1.35; font-weight: 700; }
+.st-page .k-card h3 { margin: 0; font-size: var(--fs-h3); font-weight: 700; }
+.st-row-h { display: flex; align-items: baseline; justify-content: space-between; }
+
+.st-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.st-dow { text-align: center; font-size: var(--fs-xs); color: var(--g50); }
+.st-cal i, .st-pad {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  max-height: 44px;
+  border-radius: var(--r-md);
+  background: var(--g5);
+  color: var(--g50);
+  font-size: var(--fs-xs);
+  font-style: normal;
+}
+.st-pad { background: none; }
+.st-cal i.l1 { background: var(--m5); color: var(--m70); }
+.st-cal i.l2 { background: var(--m20); color: var(--m70); }
+.st-cal i.l3 { background: var(--m40); color: var(--g90); }
+.st-cal i.l4 { background: var(--m50); color: #fff; }
+
+.st-weak { list-style: none; margin: 0; padding: 0; display: grid; }
+.st-weak-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); min-height: 52px; border-bottom: 1px solid var(--g10); color: inherit; text-decoration: none; }
+.st-weak li:last-child .st-weak-row { border-bottom: 0; }
+.st-weak-w { display: grid; min-width: 0; }
+.st-weak-m { font-size: var(--fs-sm); color: var(--g60); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-x { flex: none; color: var(--bad-50); font-variant-numeric: tabular-nums; }
+
+.st-fc { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; align-items: end; }
+.st-fc-col { display: grid; justify-items: center; gap: 4px; }
+.st-fc-col b { font-size: var(--fs-sm); }
+.st-fc-bar { display: flex; align-items: flex-end; width: 100%; max-width: 32px; height: 96px; border-radius: var(--r-md); background: var(--g5); overflow: hidden; }
+.st-fc-bar i { display: block; width: 100%; background: var(--m50); min-height: 2px; border-radius: var(--r-sm) var(--r-sm) 0 0; }
+.st-fc-d { font-size: var(--fs-xs); color: var(--g60); white-space: nowrap; }
+
+.st-prog { display: grid; gap: var(--sp-3); }
+.st-prog-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--sp-3); }
+.st-prog-n { font-size: var(--fs-sm); color: var(--g60); font-variant-numeric: tabular-nums; }

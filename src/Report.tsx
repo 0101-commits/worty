@@ -1,5 +1,5 @@
 // 「이상해요」(덱 · 단어 상세): 어디가 이상한지 고르고 한 줄 메모 → 다음 새벽 검토가 맨 먼저 본다
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Button, Chip, TextField } from './k/index.tsx'
 import type { ReportKind } from '../shared/api.ts'
 import { api, errorText } from './api.ts'
@@ -14,7 +14,7 @@ const KINDS: Array<[ReportKind, string]> = [
   ['other', '기타'],
 ]
 
-export function ReportButton({ wordId, lemma }: { wordId: string; lemma: string }) {
+export function ReportButton({ wordId, lemma, children, className = 'revonly' }: { wordId: string; lemma: string; children?: ReactNode; className?: string }) {
   const dlg = useRef<HTMLDialogElement>(null)
   const [kind, setKind] = useState<ReportKind>('meaning')
   const [note, setNote] = useState('')
@@ -39,8 +39,8 @@ export function ReportButton({ wordId, lemma }: { wordId: string; lemma: string 
   }
   return (
     <>
-      <button type="button" className="revonly" onClick={(e) => { e.stopPropagation(); dlg.current?.showModal() }}>
-        이상해요
+      <button type="button" className={className} onClick={(e) => { e.stopPropagation(); dlg.current?.showModal() }}>
+        {children ?? '이상해요'}
       </button>
       {/* 바깥(뒤 배경)을 누르면 닫힘. 내용을 안쪽 칸에 넣어 dialog 자신 = 뒤 배경뿐(창 여백을 눌러도 닫히던 것 고침) */}
       {/* onClose = 닫기 단추 · 바깥 클릭 · ESC(브라우저가 직접 닫음) 모두 — 지난 실패 안내를 지운다 */}

@@ -1,0 +1,74 @@
+/* 단어 화면(v11). 토큰은 src/k/tokens.css */
+.wd-tags, .wd-short {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+.wd-tags::-webkit-scrollbar, .wd-short::-webkit-scrollbar { display: none; }
+.wd-tags > *, .wd-short > * { flex: none; }
+.wd-reset, .wd-sort {
+  border: 0;
+  background: none;
+  color: var(--p60);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  min-height: 36px;
+  padding: 0 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.wd-bar { display: flex; align-items: center; justify-content: space-between; min-height: 32px; }
+
+.wd-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.wd-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--g10);
+  color: inherit;
+  text-decoration: none;
+}
+.wd-sk { display: flex; align-items: center; min-height: 64px; padding: 10px 0; border-bottom: 1px solid var(--g10); }
+.wd-list li:last-child .wd-row { border-bottom: 0; }
+.wd-th { flex: none; width: 56px; height: 42px; border-radius: var(--r-md); object-fit: cover; background: var(--g5); }
+.wd-mid { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.wd-w { font-size: var(--fs-body); line-height: 1.3; }
+.wd-w .art { font-size: 0.8em; }
+.wd-m { font-size: var(--fs-sm); color: var(--g60); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 아래 「N개 연습」: 탭바 위에 붙는다 */
+.wd-cta {
+  position: sticky;
+  bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+  padding-top: 8px;
+}
+
+/* 거르기 시트의 고르기 줄 */
+.wd-opts { list-style: none; margin: 0; padding: 0; display: grid; }
+.wd-opt {
+  width: 100%;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--g10);
+  background: none;
+  font-size: var(--fs-body);
+  text-align: left;
+  cursor: pointer;
+}
+.wd-opts li:last-child .wd-opt { border-bottom: 0; }
+.wd-opt.on { color: var(--m70); font-weight: 700; }
+.wd-opt.on::after { content: '✓'; color: var(--m50); }

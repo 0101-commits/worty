@@ -4,7 +4,7 @@ import { Button, ContentBadge, SegmentedControl, SegmentedControlItem, Switch } 
 import { IconChevronRight, IconSend } from '../k/icons.tsx'
 import type { Settings } from '../../shared/api.ts'
 import { MOCK, api, errorText, getToken, setToken, type TestNotificationResponse } from '../api.ts'
-import { fmtDay, studyDay } from '../format.ts'
+import { fmtDay, num, studyDay } from '../format.ts'
 import { useAsync } from '../hooks.ts'
 import { disablePush, enablePush, pushSupported, pushSync } from '../push.ts'
 import { linkTo } from '../router.ts'
@@ -49,6 +49,7 @@ export default function SettingsScreen({ settings, onChange }: { settings: Setti
   // 그림 확인 대기 수(못 읽어도 설정 화면은 그대로 — 없는 것처럼)
   const pending = useAsync(() => api.pendingReview().then((r) => r.items.length, () => 0), [])
   const waiting = pending.data ?? 0
+  const counts = useAsync(() => api.stats(), []) // 관리: 그림 있는 단어 수(기록 화면에서 옮김)
   const plusDays = (n: number) => studyDay(new Date(Date.now() + n * 86_400_000))
 
   return (
@@ -171,6 +172,14 @@ export default function SettingsScreen({ settings, onChange }: { settings: Setti
             <Button variant="outlined" color="assistive" size="small" loading={test.busy} leadingContent={<IconSend />} onClick={test.run}>
               시험 통
             </Button>
+          </div>
+        </div>
+
+        <h3 className="sec-t">관리</h3>
+        <div className="box wh">
+          <div className="kv">
+            <span>그림 있는 단어</span>
+            <b className="num">{counts.data ? `${num(counts.data.images)} / ${num(counts.data.total_words)}` : '…'}</b>
           </div>
         </div>
 
