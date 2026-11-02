@@ -1,6 +1,6 @@
 // 「단어 넣기」: 기사에서 만난 단어(활용형도 됨) + 링크 → 다음 새벽 작업이 카드로 만들어 맨 앞에. 최근 넣은 10개 상태.
 import { useEffect, useState } from 'react'
-import { Button, ContentBadge, TextField } from '@montage-ui/core'
+import { Button, ContentBadge, TextField } from './k/index.tsx'
 import type { RequestStatus, WordRequestItem } from '../shared/api.ts'
 import { REQ_TEXT } from '../shared/request.ts'
 import { api, errorText } from './api.ts'

@@ -1,5 +1,5 @@
 // 기록: 벤토 4 · 12주 열기 지도 · 상태 막대 · 레벨 수
-import { Skeleton } from '@montage-ui/core'
+import { Skeleton } from '../k/index.tsx'
 import type { StatsResponse } from '../../shared/api.ts'
 import { api } from '../api.ts'
 import { fmtDay, num } from '../format.ts'

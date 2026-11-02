@@ -1,5 +1,5 @@
 // 단어 하나: 그림 · 뜻 · 예문 · 카드 상태 · 최근 채점
-import { ContentBadge, Skeleton } from '@montage-ui/core'
+import { ContentBadge, Skeleton } from '../k/index.tsx'
 import { api } from '../api.ts'
 import { RATING_LABEL, isWeak } from '../deck.ts'
 import { STATE_LABEL, dayDiff, fmtDate, fmtDay } from '../format.ts'

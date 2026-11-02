@@ -1,6 +1,6 @@
 // 그림 확인: AI 검사가 못 정한 그림을 한 장씩 보고 「좋아요」(공개 그림으로) · 「다시 그리기」(버림 → 매일 작업이 다시 그림)
 import { useEffect, useRef, useState } from 'react'
-import { Button, Skeleton } from '@montage-ui/core'
+import { Button, Skeleton } from '../k/index.tsx'
 import type { PendingReviewItem } from '../../shared/api.ts'
 import { ApiError, api, errorText, pendingImageUrl } from '../api.ts'
 import { useAsync } from '../hooks.ts'

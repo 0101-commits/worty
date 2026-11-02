@@ -1,6 +1,6 @@
 // 고친 카드: 매일 새벽 검토가 바꾼 것(되돌리기) · 확인 필요(근거가 엇갈려 안 바꾼 것)
 import { useState } from 'react'
-import { Button, Skeleton } from '@montage-ui/core'
+import { Button, Skeleton } from '../k/index.tsx'
 import type { ChangeItem } from '../../shared/api.ts'
 import { api, errorText } from '../api.ts'
 import { fmtDate } from '../format.ts'

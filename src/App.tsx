@@ -1,7 +1,7 @@
 // 앱 틀: 접속 키 → 설정 불러오기 → 해시 경로별 화면 + 아래 탭
 import { useEffect, useState } from 'react'
-import { BottomNavigation, BottomNavigationItem, Button, Skeleton, TextField } from '@montage-ui/core'
-import { IconBook, IconBookFill, IconCalendar, IconCalendarFill, IconHome, IconHomeFill } from '@montage-ui/icon'
+import { BottomNavigation, BottomNavigationItem, Button, Skeleton, TextField } from './k/index.tsx'
+import { IconBook, IconBookFill, IconCalendar, IconCalendarFill, IconHome, IconHomeFill } from './k/icons.tsx'
 import type { Settings } from '../shared/api.ts'
 import { ApiError, MOCK, api, errorText, getToken, prefetchToday, retryUnsent, setToken, setUnauthorizedHandler } from './api.ts'
 import { navigate, useRoute } from './router.ts'

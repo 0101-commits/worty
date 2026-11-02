@@ -1,6 +1,6 @@
 // 단어 목록: 검색 · 칩 · 정렬(B3) · 더 보기 · 이 목록으로 연습
 import { useEffect, useState } from 'react'
-import { Button, Chip, ContentBadge, SearchField, SegmentedControl, SegmentedControlItem, Skeleton } from '@montage-ui/core'
+import { Button, Chip, ContentBadge, SearchField, SegmentedControl, SegmentedControlItem, Skeleton } from '../k/index.tsx'
 import type { DeckItem, WordsQuery } from '../../shared/api.ts'
 import { api, errorText } from '../api.ts'
 import { STATE_LABEL, dueText, fmtDay, num, studyDay } from '../format.ts'

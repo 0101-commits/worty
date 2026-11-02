@@ -2,7 +2,7 @@
 // 한 문제씩 → 맞힘/틀림 표시(고른 보기의 뜻도) → 다음. 끝나면 결과를 practice 표에 보내고,
 // 틀린 배운 단어는 서버가 「다시」 채점해 오늘 몫 복습에 다시 넣는다. 틀린 단어만 다시 할 수도 있다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Skeleton } from '@montage-ui/core'
+import { Button, Skeleton } from '../k/index.tsx'
 import type { DeckItem, PoolWord, PracticeMode, PracticeScope } from '../../shared/api.ts'
 import { api, errorText } from '../api.ts'
 import { MODES, checkWrite, makeQuestions, withArticle, wordsIn } from '../practice.ts'

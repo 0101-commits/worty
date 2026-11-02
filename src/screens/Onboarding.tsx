@@ -1,6 +1,6 @@
 // 처음 한 번: O1 레벨·하루 수 → O2 디스코드 확인 → 시작
 import { useState } from 'react'
-import { Button, SegmentedControl, SegmentedControlItem } from '@montage-ui/core'
+import { Button, SegmentedControl, SegmentedControlItem } from '../k/index.tsx'
 import type { Level, Settings } from '../../shared/api.ts'
 import { Emoji, LEVELS, LEVEL_HINT, Stepper, Top } from '../ui.tsx'
 import { DiscordConnect } from './Setup.tsx'

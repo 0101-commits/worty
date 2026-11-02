@@ -1,8 +1,8 @@
 // 여러 화면이 같이 쓰는 작은 부품
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { animate } from 'motion/react'
-import { Button, ContentBadge, IconButton, TopNavigation, TopNavigationButton, useRegionStore, type ThemeColorsToken } from '@montage-ui/core'
-import { IconBell, IconChevronLeft, IconMinus, IconPlus, IconSetting } from '@montage-ui/icon'
+import { Button, ContentBadge, IconButton, TopNavigation, TopNavigationButton, useRegionStore, type ThemeColorsToken } from './k/index.tsx'
+import { IconBell, IconChevronLeft, IconMinus, IconPlus, IconSetting } from './k/icons.tsx'
 import type { Level, Pos, Word } from '../shared/api.ts'
 import { imgSrc } from './api.ts'
 import { article } from './format.ts'

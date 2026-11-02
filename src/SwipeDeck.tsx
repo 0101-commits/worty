@@ -2,7 +2,7 @@
 // ← 다시(1) · ↓ 어려움(2) · → 좋음(3) · ↑ 쉬움(4). swipe_mode 2 면 가로만.
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { animate, motion, useMotionValue, useMotionValueEvent, useTransform, type MotionValue } from 'motion/react'
-import { ContentBadge } from '@montage-ui/core'
+import { ContentBadge } from './k/index.tsx'
 import type { DeckItem, Rating } from '../shared/api.ts'
 import { RATING_LABEL, SWIPE, decideSwipe, intervals, isWeak } from './deck.ts'
 import { Emoji, Example, LevelBadge, Lemma, POS_LABEL, WeakBadge, WordImage } from './ui.tsx'

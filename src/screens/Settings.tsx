@@ -1,7 +1,7 @@
 // 설정: 고치면 바로 저장(PUT /api/settings)
 import { useEffect, useState } from 'react'
-import { Button, ContentBadge, SegmentedControl, SegmentedControlItem, Switch } from '@montage-ui/core'
-import { IconChevronRight, IconSend } from '@montage-ui/icon'
+import { Button, ContentBadge, SegmentedControl, SegmentedControlItem, Switch } from '../k/index.tsx'
+import { IconChevronRight, IconSend } from '../k/icons.tsx'
 import type { Settings } from '../../shared/api.ts'
 import { MOCK, api, errorText, getToken, setToken, type TestNotificationResponse } from '../api.ts'
 import { fmtDay, studyDay } from '../format.ts'

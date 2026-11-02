@@ -1,0 +1,71 @@
+/* Worty × KRDS 바탕 토큰(v11, 2026-11-02).
+   KRDS(대한민국 정부 디자인 시스템) 글꼴·글자 척도·색 단계·간격을 따르고, 학습 표시에만 민트를 쓴다.
+   - 버튼·링크·초점 = KRDS 파랑(primary-50 #256EF4) · 학습 진도·배운 표시 = 민트(보르티 색)
+   - 기본 글자 17px · 줄 간격 150% 이상 · 기사 본문 19px/175% · 누르는 곳 48px 이상
+   글꼴 = Pretendard GOV 부분집합(KS X 1001 한글 2,350 + 라틴 확장 = 독일어 ä·ö·ü·ß), public/fonts/pgov.woff2 */
+@font-face {
+  font-family: "Pretendard GOV";
+  src: url(/fonts/pgov.woff2) format("woff2");
+  font-weight: 45 930;
+  font-display: swap;
+}
+
+:root {
+  /* KRDS 기본(파랑) */
+  --p5: #ECF2FE; --p10: #D8E5FD; --p20: #B1CEFB; --p40: #6A9EF7; --p50: #256EF4; --p60: #0B50D0; --p70: #083891;
+  /* KRDS 회색 */
+  --g0: #FFFFFF; --g5: #F4F5F6; --g10: #E6E8EA; --g20: #CDD1D5; --g30: #B1B8BE; --g40: #8A949E;
+  --g50: #6D7882; --g60: #58616A; --g70: #464C53; --g80: #33363D; --g90: #1E2124;
+  /* 학습 민트 */
+  --m5: #E3F6F2; --m20: #BFE9E2; --m40: #6BCDBF; --m50: #14A391; --m70: #0B6E62;
+  /* 뜻 색 */
+  --ok-50: #228738; --ok-5: #EAF6EC; --warn-50: #8A5C00; --warn-icon: #C98A00; --warn-5: #FFF6E0;
+  --bad-50: #DE3412; --bad-5: #FDEFEC;
+  /* 레벨 */
+  --lv-b1: #0B6E62; --lv-b1-bg: #E3F6F2; --lv-b2: #0B50D0; --lv-b2-bg: #ECF2FE; --lv-c1: #6A3FC4; --lv-c1-bg: #F1ECFB;
+
+  /* 글자(KRDS 모바일 척도) */
+  --font: "Pretendard GOV", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --fs-display: 28px; --fs-h1: 24px; --fs-h2: 22px; --fs-h3: 19px; --fs-body: 17px; --fs-sm: 15px; --fs-xs: 13px;
+  --fs-read: 19px; --lh: 1.5; --lh-read: 1.75;
+  /* 모양 */
+  --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+  --tap: 48px;
+  --elev: 0 1px 2px rgba(30, 33, 36, 0.06);
+  --elev-up: 0 -4px 16px rgba(30, 33, 36, 0.08);
+
+  /* 옛 화면 이름(app.css)을 KRDS 값으로 다시 가리킨다 — 화면을 새로 쓰기 전에도 전체가 KRDS 로 보이게 */
+  --bg: var(--g5); --bg2: #EEF0F2; --paper: var(--g0);
+  --ink: var(--g90); --ink2: var(--g70); --ink3: var(--g50);
+  --line: var(--g20); --line2: var(--g10);
+  --accent: var(--p50); --accent-ink: var(--p60); --accent-bg: var(--p5); --accent-mid: var(--p40); --accent-light: var(--p10);
+  --der: #2160D8; --die: #D0311C; --das: #1F7A33;
+  --ok: var(--ok-50); --ok-bg: var(--ok-5); --warn: var(--warn-50); --warn-bg: var(--warn-5); --bad: var(--bad-50); --bad-bg: var(--bad-5);
+  --easy: var(--m70); --easy-bg: var(--m5);
+  --shadow: var(--elev);
+  --r: var(--r-lg);
+  --nav-h: 60px;
+  /* app.css 에 남은 montage 이름 */
+  --semantic-line-brand-strong: rgba(37, 110, 244, 0.45);
+  --semantic-foreground-accent-violet: var(--lv-c1);
+  --semantic-foreground-accent-pink: #C2378B;
+  --semantic-surface-brand-primary: var(--p50);
+  color-scheme: light;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  line-height: var(--lh);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 0;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--p40); outline-offset: 2px; }
+.g-der { color: var(--der); } .g-die { color: var(--die); } .g-das { color: var(--das); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

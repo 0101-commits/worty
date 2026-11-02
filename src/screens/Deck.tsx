@@ -1,8 +1,8 @@
 // 오늘 몫 덱(기획 v8): 오늘 화면의 「시작 · 이어서」와 알림 링크(?first=)로 들어온다.
 // 채점은 쌓았다가 판 끝(또는 탭을 떠날 때) 한 번에 보낸다. 판이 끝나면 오늘 화면으로 돌아가 결과를 보여 준다.
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { Skeleton } from '@montage-ui/core'
-import { IconFlipBackward } from '@montage-ui/icon'
+import { Skeleton } from '../k/index.tsx'
+import { IconFlipBackward } from '../k/icons.tsx'
 import type { Settings, TodayResponse } from '../../shared/api.ts'
 import { api, errorText, sendReviews } from '../api.ts'
 import { buildSession, deckReducer, initDeck } from '../deck.ts'

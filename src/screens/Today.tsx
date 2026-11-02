@@ -1,8 +1,8 @@
 // 오늘 화면(기획 v8 안 A): 오늘 몫 카드 + 더 공부하기. 덱은 #/deck 에서 넘긴다.
 // 오늘 몫 = 오늘 학습일(04:00 경계)이 끝나기 전에 마감되는 복습 + 아침에 정한 새 단어 — 다 하면 그날은 더 생기지 않는다.
 import { useEffect, useRef, useState } from 'react'
-import { Button, SegmentedControl, SegmentedControlItem, Skeleton } from '@montage-ui/core'
-import { IconChevronRight } from '@montage-ui/icon'
+import { Button, SegmentedControl, SegmentedControlItem, Skeleton } from '../k/index.tsx'
+import { IconChevronRight } from '../k/icons.tsx'
 import type { PracticeMode, Settings, TodayResponse } from '../../shared/api.ts'
 import { api, errorText } from '../api.ts'
 import { fmtDay } from '../format.ts'

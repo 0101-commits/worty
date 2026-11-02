@@ -1,6 +1,6 @@
 // 「이상해요」(덱 · 단어 상세): 어디가 이상한지 고르고 한 줄 메모 → 다음 새벽 검토가 맨 먼저 본다
 import { useRef, useState } from 'react'
-import { Button, Chip, TextField } from '@montage-ui/core'
+import { Button, Chip, TextField } from './k/index.tsx'
 import type { ReportKind } from '../shared/api.ts'
 import { api, errorText } from './api.ts'
 import { useToaster } from './ui.tsx'

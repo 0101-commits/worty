@@ -1,5 +1,5 @@
 // 받은편지함 = 디스코드로 보낸 통의 사본(최근 30통)
-import { Button, ContentBadge, Skeleton } from '@montage-ui/core'
+import { Button, ContentBadge, Skeleton } from '../k/index.tsx'
 import type { InboxItem } from '../../shared/api.ts'
 import { api } from '../api.ts'
 import { fmtDate } from '../format.ts'

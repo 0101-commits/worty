@@ -1,7 +1,7 @@
 // 관사 1분(B5): der · die · das 만 빠르게. 1분 또는 20문제. 틀린 단어는 끝에 모아 보여 준다.
 // 일정(FSRS)은 안 바꾼다(D5). 순위표 없음(개인용).
 import { useEffect, useRef, useState } from 'react'
-import { Button, Skeleton } from '@montage-ui/core'
+import { Button, Skeleton } from '../k/index.tsx'
 import type { DeckItem } from '../../shared/api.ts'
 import { api } from '../api.ts'
 import { shuffle } from '../deck.ts'

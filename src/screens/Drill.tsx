@@ -1,7 +1,7 @@
 // 추가 연습(B4): 오늘 몫 뒤 「범위 × 분량」, 또는 단어 목록에서 「이 목록으로 연습」.
 // 한 판 안에서만 돈다 — 다시·어려움은 줄 뒤로, 좋음·쉬움은 빼기. 서버에 채점을 보내지 않아 일정(FSRS)은 그대로(D5, G17).
 import { useReducer, useState } from 'react'
-import { Button, Skeleton } from '@montage-ui/core'
+import { Button, Skeleton } from '../k/index.tsx'
 import type { DeckItem, DrillScope, Settings, WordsQuery } from '../../shared/api.ts'
 import { api } from '../api.ts'
 import { deckReducer, initDeck, shuffle } from '../deck.ts'

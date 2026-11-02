@@ -1,8 +1,8 @@
 // 연결 설정: 폰에서 열기(QR) · 디스코드 웹후크. 사용자가 할 일은 찍기·붙여넣기·누르기뿐.
 import { useMemo, useState } from 'react'
 import { create } from 'qrcode'
-import { Button, ContentBadge, Skeleton, TextField } from '@montage-ui/core'
-import { IconLink, IconSend } from '@montage-ui/icon'
+import { Button, ContentBadge, Skeleton, TextField } from '../k/index.tsx'
+import { IconLink, IconSend } from '../k/icons.tsx'
 import { ApiError, MOCK, api, errorText, getToken, type WebhookSaveResponse } from '../api.ts'
 import { useAsync } from '../hooks.ts'
 import { navigate } from '../router.ts'
