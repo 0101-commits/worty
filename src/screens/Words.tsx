@@ -1,7 +1,7 @@
 // 단어(v11): 검색 한 줄 · 꼬리표 한 줄(상태·레벨·품사·그림) · 바로가기(자주 틀림·이번 주) · 순서 · 목록 · 「N개 연습」
 // 검색은 움라우트를 푼 글자로 맞고(ae = ä), 앞의 der/die/das 는 무시, 한국어 뜻도 찾는다(서버 /api/words).
 import { useEffect, useState, type ReactNode } from 'react'
-import { BottomSheet, Button, Chip, ContentBadge, SearchField, Skeleton, TopNavigationButton } from '../k/index.tsx'
+import { BottomSheet, Button, Chip, ContentBadge, SearchField, Skeleton, TopNavigationButton, SegmentedControl, SegmentedControlItem } from '../k/index.tsx'
 import { IconChevronDown, IconPlus } from '../k/icons.tsx'
 import type { DeckItem, WordsCountsResponse } from '../../shared/api.ts'
 import { api, errorText, imgSrc } from '../api.ts'
@@ -103,6 +103,11 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
         }
       />
       <main className="page wd-page">
+        {/* v11 4단계: 표현은 기사에서 저장한 것 — 화면은 /expressions */}
+        <SegmentedControl size="small" value="words" onValueChange={(v) => v === 'expr' && navigate('/expressions')} aria-label="단어 · 표현">
+          <SegmentedControlItem value="words">단어</SegmentedControlItem>
+          <SegmentedControlItem value="expr">표현</SegmentedControlItem>
+        </SegmentedControl>
         <SearchField
           size="medium"
           placeholder="독일어 · 뜻 검색 (ae = ä)"
