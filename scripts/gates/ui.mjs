@@ -49,6 +49,14 @@ async function playStep(page, seen, shot) {
   }
   seen.add(kind)
   await snap(kind)
+  // 오늘 몫 끝의 저장한 표현(v11 4단계): 「표현 보기」 → O
+  if (kind === 'expr') {
+    await page.locator('.ss-bar').getByRole('button', { name: '표현 보기' }).click()
+    await sleep(120)
+    await page.getByRole('button', { name: '맞힘' }).click()
+    await sleep(200)
+    return kind
+  }
   if (kind === 'flip') {
     await page.keyboard.press('ArrowRight')
     await sleep(450)

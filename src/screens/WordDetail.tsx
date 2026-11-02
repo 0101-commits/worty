@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { Button, Card, ContentBadge, IconButton, Skeleton } from '../k/index.tsx'
 import { IconPlay } from '../k/icons.tsx'
 import { api, errorText, imgSrc } from '../api.ts'
+import { articleApi } from '../articles.ts'
+import { linkTo } from '../router.ts'
 import { fmtDay } from '../format.ts'
 import { useAsync } from '../hooks.ts'
 import { ReportButton } from '../Report.tsx'
@@ -91,6 +93,8 @@ function Body({ d, reload }: { d: WordDetailResponse; reload: () => void }) {
         )}
       </Card>
 
+      <InArticles id={w.id} />
+
       <Card className="wdt-rec">
         <h3>내 기록</h3>
         <p className="wdt-rec-line">{myRecord(d)}</p>
@@ -105,5 +109,24 @@ function Body({ d, reload }: { d: WordDetailResponse; reload: () => void }) {
         </ReportButton>
       </div>
     </>
+  )
+}
+
+/** 기사 속 문장(v11 4단계): 오늘의 기사에서 이 단어가 나온 문장, 최근 3개. 없으면 안 그린다 */
+function InArticles({ id }: { id: string }) {
+  const r = useAsync(() => articleApi.wordArticles(id), [id])
+  const items = r.data?.items ?? []
+  if (!items.length) return null
+  return (
+    <Card className="wdt-rec">
+      <h3>기사 속 문장</h3>
+      {items.map((x) => (
+        <a key={x.article_id} className="wdt-art" {...linkTo(`/article/${x.article_id}`)}>
+          <span lang="de">{x.de.split(x.form).flatMap((part, i, arr) => (i < arr.length - 1 ? [part, <b key={i}>{x.form}</b>] : [part]))}</span>
+          <span className="ko">{x.ko}</span>
+          <small>{x.day.slice(5).replace('-', '/')} · {x.title}</small>
+        </a>
+      ))}
+    </Card>
   )
 }

@@ -75,6 +75,8 @@ async function run(db) {
   out.badAid = (await call(db, 'POST', '/api/expressions', { article_id: 99999, items: [{ base: 'auf etwas abzielen', meaning_ko: '목표로 하다' }] })).status;
   out.badAidNull = (await db.prepare(`SELECT article_id FROM expressions WHERE base = 'auf etwas abzielen'`).first()).article_id;
   out.httpOnly = (await call(db, 'POST', '/api/admin/articles', { items: [{ source: 'kbs', ext_id: '9', url: 'javascript:alert(1)', title: 'x', day: '2026-11-02' }] })).status;
+  out.wordArt = (await call(db, 'GET', '/api/word/w0001/articles')).body.items.map((x) => [x.form, x.title]);
+  out.wordArtNone = (await call(db, 'GET', '/api/word/w9999/articles')).status;
   out.purge = (await call(db, 'POST', '/api/admin/articles/purge')).body.purged;
   out.known = (await call(db, 'GET', '/api/admin/articles/known?since=2000-01-01')).body.items.length;
   return out;
@@ -100,4 +102,6 @@ test('기사·표현 API: D1 과 Postgres 결과가 같고 규칙대로', async 
   assert.equal(a.badAid, 200);
   assert.equal(a.badAidNull, null, '없는 기사 번호는 null');
   assert.equal(a.httpOnly, 400, 'https 주소만');
+  assert.deepEqual(a.wordArt, [['Behörden', 'Extra B'], ['Behörden', 'Extra A'], ['Behörden', 'Haupt']], '기사 속 문장: 낱말 목록의 꼴로, 최근 기사부터 3개');
+  assert.equal(a.wordArtNone, 404);
 });

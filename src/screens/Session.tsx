@@ -2,14 +2,16 @@
 // 채점은 쌓았다가 판 끝(또는 앱을 내릴 때) 한 번에 보낸다(sendReviews — 못 보내면 기기에 적어 두고 다음에 열 때 다시).
 // 「+10개」(#/session?more=1)는 배운 단어 10개로 같은 세션을 돌리고 결과는 연습 기록(/api/practice)에 적는다 — 틀린 단어는 서버가 「다시」로.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { BottomSheet, Button, IconButton, ProgressBar, Skeleton, TextField } from '../k/index.tsx'
+import { BottomSheet, Button, IconButton, OxBar, ProgressBar, Skeleton, TextField } from '../k/index.tsx'
 import { IconClose, IconFlipBackward, IconMore } from '../k/icons.tsx'
 import type { DeckItem, PoolWord, PracticeMode, PracticeResultsRequest, Rating } from '../../shared/api.ts'
 import { api, errorText, sendReviews } from '../api.ts'
+import { articleApi, type SavedExpr } from '../articles.ts'
+import { speak } from '../tts.ts'
 import { deckReducer, initDeck } from '../deck.ts'
 import { useAsync } from '../hooks.ts'
 import { linkTo, navigate, useRoute } from '../router.ts'
-import { MORE_N, autoGrade, limitFor, mergePool, orderToday, oxCount, planStep, practiceMode, type Kind, type Step } from '../session.ts'
+import { EXPR_PER_DAY, MORE_N, autoGrade, limitFor, mergePool, orderToday, oxCount, planStep, practiceMode, type Kind, type Step } from '../session.ts'
 import { CardFace, SwipeDeck } from '../SwipeDeck.tsx'
 import { T } from '../text.ts'
 import { Emoji, ErrorBox, useToaster } from '../ui.tsx'
@@ -24,13 +26,19 @@ interface Loaded {
   /** 오늘 학습일 끝(오늘 몫만). 채점 뒤 이보다 앞에 다시 볼 카드는 같은 판 뒤로 */
   dayEnd: string | null
   key: string
+  /** 오늘 몫 끝에 이어 볼 저장한 표현(하루 EXPR_PER_DAY 개, +10개에는 없음) */
+  exprs: SavedExpr[]
 }
 
 async function loadToday(first: string | null): Promise<Loaded> {
   // 보기(오답) 재료는 연습 재료 요청에 딸려 온다. 못 받으면 오늘 카드 단어로만
-  const [t, p] = await Promise.all([api.today(), api.practice('all', 1).catch(() => null)])
+  const [t, p, e] = await Promise.all([
+    api.today(),
+    api.practice('all', 1).catch(() => null),
+    articleApi.exprDue(EXPR_PER_DAY).catch(() => ({ items: [] as SavedExpr[] })),
+  ])
   const queue = orderToday(t, first)
-  return { mode: 'today', queue, pool: mergePool(p?.pool ?? [], queue), dayEnd: t.day_end, key: t.date + t.settings.review_only_day + (first ?? '') }
+  return { mode: 'today', queue, pool: mergePool(p?.pool ?? [], queue), dayEnd: t.day_end, key: t.date + t.settings.review_only_day + (first ?? ''), exprs: e.items }
 }
 
 async function loadMore(): Promise<Loaded> {
@@ -38,7 +46,7 @@ async function loadMore(): Promise<Loaded> {
   let r = await api.practice('week', MORE_N)
   if (usable(r.items).length < 4) r = await api.practice('all', MORE_N)
   const queue = usable(r.items).slice(0, MORE_N)
-  return { mode: 'more', queue, pool: mergePool(r.pool, queue), dayEnd: null, key: 'more' + Date.now() }
+  return { mode: 'more', queue, pool: mergePool(r.pool, queue), dayEnd: null, key: 'more' + Date.now(), exprs: [] }
 }
 
 export default function Session() {
@@ -106,6 +114,10 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
   const [menu, setMenu] = useState(false)
   const closeMenu = useCallback(() => setMenu(false), [])
   const [skipped, setSkipped] = useState(0)
+  // 카드 줄이 끝나면 저장한 표현을 이어서(같은 진행 막대). ei = 지금 표현 차례, eox = 표현 O·X
+  const [ei, setEi] = useState(0)
+  const [eox, setEox] = useState({ o: 0, x: 0 })
+  const total = s.queue.length + d.exprs.length
   const answered = useRef<Answered | null>(null)
   // +10개: 채점 하나(단어|시각) → 퀴즈 꼴(연습 기록 방식)
   const kinds = useRef(new Map<string, Kind>())
@@ -198,16 +210,33 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
     setUndoable(false)
   }
 
+  if (s.finished && ei < d.exprs.length) {
+    const gradeExpr = (rating: 1 | 3) => {
+      articleApi.gradeExpr(d.exprs[ei].id, rating).catch((e) => toast(T.sendFail(errorText(e)), 'negative'))
+      setEox((v) => (rating === 1 ? { ...v, x: v.x + 1 } : { ...v, o: v.o + 1 }))
+      setEi((n) => n + 1)
+    }
+    return (
+      <div className="ss">
+        <SessionHead value={(s.queue.length + ei) / Math.max(1, total)} count={`${s.queue.length + ei + 1} / ${total}`} />
+        <main className="page ss-page" data-step="expr">
+          <ExprStep key={d.exprs[ei].id} x={d.exprs[ei]} onGrade={gradeExpr} />
+        </main>
+      </div>
+    )
+  }
+
   if (s.finished) {
-    const ox = oxCount(s.pending)
+    const c = oxCount(s.pending)
+    const ox = { o: c.o + eox.o, x: c.x + eox.x }
     return (
       <div className="ss">
         <SessionHead value={1} count="" />
         <main className="page ss-page">
           <section className="ss-end">
             <Emoji name={ox.x <= ox.o / 4 ? 'happy' : 'study'} size={104} />
-            <h1>{s.queue.length === 0 ? (today ? T.planEmpty : T.moreEmpty) : today ? T.planDone : T.sessionMore}</h1>
-            {s.pending.length > 0 && (
+            <h1>{total === 0 ? (today ? T.planEmpty : T.moreEmpty) : today ? T.planDone : T.sessionMore}</h1>
+            {s.pending.length + eox.o + eox.x > 0 && (
               <p className="ss-ox" aria-label={`${T.srO} ${ox.o} · ${T.srX} ${ox.x}`}>
                 <span className="o">
                   {T.o} <b className="num">{ox.o}</b>
@@ -242,8 +271,8 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
   return (
     <div className="ss">
       <SessionHead
-        value={s.index / Math.max(1, s.queue.length)}
-        count={`${s.index + 1} / ${s.queue.length}`}
+        value={s.index / Math.max(1, total)}
+        count={`${s.index + 1} / ${total}`}
         onUndo={undoable && s.history ? undo : undefined}
         onMenu={single ? () => setMenu(true) : undefined}
       />
@@ -256,6 +285,39 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
       </main>
       <MoreMenu open={menu} item={item} onClose={closeMenu} onSkip={skip} />
     </div>
+  )
+}
+
+/** 저장한 표현: 뜻 보고 떠올리기 → 「표현 보기」 → X · O (X = 다시, O = 좋음) */
+function ExprStep({ x, onGrade }: { x: SavedExpr; onGrade: (rating: 1 | 3) => void }) {
+  const [shown, setShown] = useState(false)
+  return (
+    <>
+      <section className="ss-expr" data-testid="expr">
+        <p className="cap">저장한 표현 · 뜻을 보고 떠올려 보세요</p>
+        <p className="mean">{x.meaning_ko}</p>
+        {shown ? (
+          <>
+            <p className="base" lang="de">{x.base}</p>
+            {x.sentence ? <p className="sent" lang="de">{x.sentence}</p> : null}
+          </>
+        ) : null}
+      </section>
+      <div className="ss-bar">
+        <div className="ss-bar-in">
+          {shown ? (
+            <OxBar onX={() => onGrade(1)} onO={() => onGrade(3)} />
+          ) : (
+            <Button fullWidth size="large" onClick={() => {
+              setShown(true)
+              speak(x.base)
+            }}>
+              표현 보기
+            </Button>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
 

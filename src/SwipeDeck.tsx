@@ -1,6 +1,8 @@
 // 카드 화면(기획 v11 5절): 그림(4:3, 잘리지 않게) · 단어 · 예문 · 큰 버튼 X / O(뒤집은 뒤).
 // 밀어서 채점: ← X(다시) · → O(좋음). 세션의 「카드 뒤집기」 단계와 넘겨 보기(Drill)가 같이 쓴다.
 // 구조는 21st.dev swipe-deck(ddoemonn, MIT)를 참고해 다시 썼다(Tailwind 없음).
+import { speak } from './tts.ts'
+import { IconPlay } from './k/icons.tsx'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { animate, motion, useMotionValue, useMotionValueEvent, useTransform, type MotionValue } from 'motion/react'
 import { Button, OxBar } from './k/index.tsx'
@@ -66,6 +68,20 @@ export function CardPicture({ word, showKo = false }: { word: Word; showKo?: boo
 }
 
 /** 카드 한 면. back = 뜻 · 예문(단어 강조) · 번역. 소개 카드도 뒷면을 쓴다 */
+/** ▶ 소리(폰 독일어 음성). 카드 뒤집기·밀기로 번지지 않게 누름을 여기서 멈춘다 */
+export function SpeakButton({ text }: { text: string }) {
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation()
+  return (
+    <button type="button" className="fc-speak" aria-label="소리 듣기" onPointerDown={stop} onPointerUp={stop} onTouchStart={stop}
+      onClick={(e) => {
+        e.stopPropagation()
+        speak(text)
+      }}>
+      <IconPlay size={16} />
+    </button>
+  )
+}
+
 export function CardFace({ item: { word, card }, back }: { item: DeckItem; back: boolean }) {
   const s = sinceLabel(card)
   return (
@@ -74,6 +90,7 @@ export function CardFace({ item: { word, card }, back }: { item: DeckItem; back:
       <div className="fc-body">
         <div className="fc-row">
           <CardWord word={word} className={back ? 'sm' : ''} />
+          <SpeakButton text={(article(word) ? article(word) + ' ' : '') + word.lemma} />
           <span className={'fc-since ' + s.tone}>{s.text}</span>
         </div>
         <div className="fc-meta">

@@ -590,3 +590,12 @@ mark.hit {
     display: block;
   }
 }
+
+/* ▶ 소리(카드 단어 옆) · 오늘 몫 끝의 표현 복습(v11 4단계) */
+.fc-speak { flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--g20); border-radius: 50%; background: var(--g0); color: var(--p50); cursor: pointer; }
+.fc-speak:active { background: var(--p5); }
+.ss-expr { display: flex; flex-direction: column; gap: var(--sp-3); background: var(--g0); border: 1px solid var(--g10); border-radius: 16px; padding: 20px 16px; min-height: 280px; justify-content: center; }
+.ss-expr .cap { margin: 0; color: var(--m70); font-size: var(--fs-xs); font-weight: 700; }
+.ss-expr .mean { margin: 0; font-size: var(--fs-h2); font-weight: 700; line-height: 1.4; }
+.ss-expr .base { margin: 0; font-size: var(--fs-h3); font-weight: 700; color: var(--p60); }
+.ss-expr .sent { margin: 0; color: var(--g60); font-size: var(--fs-sm); line-height: 1.55; }

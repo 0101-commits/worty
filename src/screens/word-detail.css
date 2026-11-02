@@ -12,3 +12,10 @@
 .wdt-rec-line { margin: 0; font-size: var(--fs-h3); font-weight: 700; color: var(--m70); font-variant-numeric: tabular-nums; }
 .wdt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 .wdt-actions .k-btn { width: 100%; justify-content: center; }
+
+/* 기사 속 문장(v11 4단계) */
+.wdt-art { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-top: 1px solid var(--g10); color: inherit; text-decoration: none; }
+.wdt-art span[lang="de"] { font-size: var(--fs-body); line-height: 1.6; }
+.wdt-art b { color: var(--p60); }
+.wdt-art .ko { color: var(--g60); font-size: var(--fs-sm); }
+.wdt-art small { color: var(--g50); font-size: var(--fs-xs); overflow-wrap: anywhere; }

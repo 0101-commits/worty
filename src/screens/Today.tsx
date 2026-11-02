@@ -9,7 +9,7 @@ import { fmtDay } from '../format.ts'
 import { useAsync } from '../hooks.ts'
 import { MODES } from '../practice.ts'
 import { navigate, useRoute } from '../router.ts'
-import { minutesFor, todayCounts } from '../session.ts'
+import { EXPR_PER_DAY, minutesFor, todayCounts } from '../session.ts'
 import { MODE_NAME, T } from '../text.ts'
 import { CountUp, ErrorBox, Top, useToaster } from '../ui.tsx'
 import { articleApi } from '../articles.ts'
@@ -100,6 +100,15 @@ function PlanCard({ d, onSettings, onChanged }: { d: TodayResponse; onSettings: 
   const reviewOnly = d.settings.review_only_day === d.date
   const away = d.settings.vacation_until && d.settings.vacation_until >= d.date ? d.settings.vacation_until : ''
   const c = todayCounts(d)
+  // 오늘 몫 끝에 이어 보는 저장한 표현 수(세션과 같은 하루 3개)
+  const [exprN, setExprN] = useState(0)
+  useEffect(() => {
+    let live = true
+    articleApi.exprDue(EXPR_PER_DAY).then((x) => live && setExprN(x.items.length), () => undefined)
+    return () => {
+      live = false
+    }
+  }, [])
 
   // 복습만(B6): 이 학습일만 새 카드 0. 다음 학습일엔 저절로 풀린다
   const setReviewOnly = async (on: boolean) => {
@@ -148,6 +157,11 @@ function PlanCard({ d, onSettings, onChanged }: { d: TodayResponse; onSettings: 
           {c.quiz > 0 && (
             <li>
               {T.stepQuiz} <b className="num">{c.quiz}</b>
+            </li>
+          )}
+          {exprN > 0 && (
+            <li>
+              표현 <b className="num">{exprN}</b>
             </li>
           )}
         </ul>

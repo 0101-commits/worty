@@ -27,6 +27,8 @@ export const WRITE_MS = 20_000
 export const OX_RATING = { x: 1, o: 3 } as const satisfies Record<'x' | 'o', Rating>
 /** 「+10개」 한 번에 낼 카드 수 */
 export const MORE_N = 10
+/** 오늘 몫 끝에 이어 보는 저장한 표현 수(v10 계획: 하루 최대 3개) */
+export const EXPR_PER_DAY = 3
 
 const DAY_MS = 86_400_000
 const ARTICLES = ['der', 'die', 'das']

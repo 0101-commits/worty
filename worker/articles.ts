@@ -173,6 +173,25 @@ const exprGrade: Handler = async ({ env, req, params }) => {
   return json({ due: n.due, state: n.state });
 };
 
+/** 단어 상세 「기사 속 문장」: 공부 자료 낱말 목록에 이 단어(기본형)가 있는 기사에서 그 꼴이 든 문장, 최근 3개 */
+const wordArticles: Handler = async ({ env, params }) => {
+  const w = await env.DB.prepare('SELECT lemma FROM words WHERE id = ?').bind(params[0]).first<{ lemma: string }>();
+  if (!w) throw new HttpError(404, 'no_word');
+  const lemma = w.lemma.replace(/^sich\s+/i, '');
+  const r = await env.DB.prepare(`SELECT id, day, title, lesson FROM articles WHERE lesson LIKE ? ORDER BY day DESC, id DESC LIMIT 10`)
+    .bind(`%"lemma":${JSON.stringify(lemma).replace(/[%_]/g, '')}%`)
+    .all<{ id: number; day: string; title: string; lesson: string }>();
+  const items: Array<{ article_id: number; day: string; title: string; de: string; ko: string; form: string }> = [];
+  for (const row of r.results) {
+    const l = parseLesson(row.lesson) as { glossary?: Array<{ form: string; lemma: string }>; sentences?: Array<{ de: string; ko: string }> } | null;
+    const forms = (l?.glossary ?? []).filter((g) => g.lemma === lemma).map((g) => g.form);
+    const s = (l?.sentences ?? []).find((x) => forms.some((f) => x.de.includes(f)));
+    if (s) items.push({ article_id: row.id, day: row.day, title: row.title, de: s.de, ko: s.ko, form: forms.find((f) => s.de.includes(f)) ?? lemma });
+    if (items.length >= 3) break;
+  }
+  return json({ items });
+};
+
 // ---------- 관리(작업) ----------
 
 type InArticle = Partial<ArticleRow> & { lesson?: unknown };
@@ -221,6 +240,7 @@ export const ARTICLE_ROUTES: Array<[string, RegExp, Handler, boolean?]> = [
   ['GET', /^\/api\/expressions\/due$/, exprDue],
   ['DELETE', /^\/api\/expressions\/(\d+)$/, exprDelete],
   ['POST', /^\/api\/expressions\/(\d+)\/grade$/, exprGrade],
+  ['GET', /^\/api\/word\/([\w-]+)\/articles$/, wordArticles],
   ['POST', /^\/api\/admin\/articles$/, adminPut],
   ['GET', /^\/api\/admin\/articles\/known$/, adminKnown],
   ['POST', /^\/api\/admin\/articles\/purge$/, adminPurge],

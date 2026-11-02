@@ -14,6 +14,7 @@ export type Article = {
   lesson: Lesson | null; deck: Record<string, { id: string; level: string; learned: boolean }>; saved: string[]
 }
 export type ArticleRow = Pick<Article, 'id' | 'url' | 'title' | 'category' | 'day' | 'role' | 'words' | 'status' | 'quiz_score'> & { saved: number }
+export type WordInArticle = { article_id: number; day: string; title: string; de: string; ko: string; form: string }
 export type SavedExpr = { id: number; article_id: number | null; base: string; meaning_ko: string; sentence: string | null; state: number; due: string; reps: number; lapses: number }
 
 const mock = <T,>(v: T) => Promise.resolve(structuredClone(v))
@@ -30,23 +31,12 @@ export const articleApi = {
   saveExprs: (article_id: number, items: Array<{ base: string; meaning_ko: string; sentence?: string }>) =>
     MOCK ? mock({ saved: items.length }) : request<{ saved: number }>('POST', '/api/expressions', { article_id, items }),
   delExpr: (id: number) => (MOCK ? mock({ ok: true }) : request<{ ok: boolean }>('DELETE', `/api/expressions/${id}`)),
+  wordArticles: (wordId: string) =>
+    MOCK ? mock({ items: [] as WordInArticle[] }) : request<{ items: WordInArticle[] }>('GET', `/api/word/${encodeURIComponent(wordId)}/articles`),
   gradeExpr: (id: number, rating: 1 | 3) => (MOCK ? mock({ ok: true }) : request<unknown>('POST', `/api/expressions/${id}/grade`, { rating })),
 }
 
-/** 폰 독일어 음성으로 읽기. 음성이 없으면 false */
-export function speak(text: string, rate = 0.9): boolean {
-  const s = typeof window !== 'undefined' ? window.speechSynthesis : undefined
-  if (!s) return false
-  s.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = 'de-DE'
-  u.rate = rate
-  const v = s.getVoices().find((x) => x.lang?.toLowerCase().startsWith('de'))
-  if (v) u.voice = v
-  s.speak(u)
-  return true
-}
-export const stopSpeak = () => window.speechSynthesis?.cancel()
+export { speak, stopSpeak } from './tts.ts'
 
 /** 기사 읽기 글자 크기(17 · 19 · 21), 이 기기에만 */
 const FS_KEY = 'worty.readFs'
