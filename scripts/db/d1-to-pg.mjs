@@ -28,6 +28,8 @@ export const TABLES = {
   word_skips: {},
   day_plans: {},
   practice: { identity: 'id' },
+  articles: { identity: 'id' },
+  expressions: { identity: 'id' },
 };
 /** 옮기지 않는 표(행 수만 알린다) */
 const SKIP = new Set(['d1_migrations', 'sqlite_sequence', 'read_budget', '_cf_KV', '_cf_METADATA']);

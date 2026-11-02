@@ -1,4 +1,5 @@
 // Wortling Worker: 정적 자산(dist) 앞에서 /api/* 와 /img/* 만 받는다 + cron 두 개.
+import { ARTICLE_ROUTES } from './articles.ts';
 import type { Env } from './env.ts';
 import type {
   AdminWordsRequest,
@@ -679,6 +680,7 @@ const getImage: Handler = async ({ env, params: [name] }) => {
 // ---------- 길 찾기 ----------
 
 const routes: Route[] = [
+  ...ARTICLE_ROUTES,
   ['GET', /^\/api\/health$/, health, true],
   ['GET', /^\/img\/([\w-]+)\.webp$/, getImage, true],
   ['GET', /^\/api\/today$/, today],
