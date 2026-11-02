@@ -85,6 +85,10 @@ const progress: Handler = async ({ env, req, params }) => {
   const b = (await req.json().catch(() => ({}))) as { opened?: boolean; done?: boolean; quiz_score?: number };
   const id = Number(params[0]);
   const now = new Date().toISOString();
+  // 아직 안 연 extra 는 「한 편 더」로만 연다(한도 우회 막기, 11-02 검토)
+  const row = await env.DB.prepare('SELECT role, status FROM articles WHERE id = ?').bind(id).first<{ role: string; status: string }>();
+  if (!row) throw new HttpError(404, 'no_article');
+  if (row.role === 'extra' && row.status === 'ready') throw new HttpError(409, 'use_more');
   if (b.opened) await env.DB.prepare(`UPDATE articles SET opened_at = COALESCE(opened_at, ?), status = CASE WHEN status = 'ready' THEN 'opened' ELSE status END WHERE id = ?`).bind(now, id).run();
   if (b.done) {
     const q = Number.isInteger(b.quiz_score) ? Math.max(0, Math.min(4, Number(b.quiz_score))) : null;
@@ -100,7 +104,8 @@ const more: Handler = async ({ env }) => {
   if (Number(opened?.n ?? 0) >= MORE_PER_DAY) return json({ article: null, reason: 'limit' });
   const row = await env.DB.prepare(`SELECT * FROM articles WHERE role = 'extra' AND day = ? AND status = 'ready' ORDER BY score DESC, id LIMIT 1`).bind(day).first<ArticleRow>();
   if (!row) return json({ article: null, reason: 'none' });
-  await env.DB.prepare(`UPDATE articles SET status = 'opened', opened_at = ? WHERE id = ?`).bind(new Date().toISOString(), row.id).run();
+  const u = await env.DB.prepare(`UPDATE articles SET status = 'opened', opened_at = ? WHERE id = ? AND status = 'ready'`).bind(new Date().toISOString(), row.id).run();
+  if (!Number(u.meta?.changes ?? 0)) return json({ article: null, reason: 'none' });
   return json({ article: await full(env.DB, { ...row, status: 'opened' }) });
 };
 
@@ -124,11 +129,13 @@ const exprSave: Handler = async ({ env, req }) => {
   const items = (b?.items ?? []).filter((x) => x?.base && x?.meaning_ko).slice(0, 20);
   if (!items.length) throw bad('no items');
   const now = new Date().toISOString();
+  // 없는 기사 번호는 null(Postgres 는 외래키 오류, D1 은 그냥 들어가 두 DB 가 갈리던 것, 11-02 검토)
+  const aid = Number.isInteger(b?.article_id) && (await env.DB.prepare('SELECT id FROM articles WHERE id = ?').bind(b!.article_id).first()) ? b!.article_id! : null;
   const stmt = env.DB.prepare(
     `INSERT INTO expressions(article_id, base, meaning_ko, sentence, created_at, due) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT (base) DO UPDATE SET meaning_ko = excluded.meaning_ko`,
   );
-  await env.DB.batch(items.map((x) => stmt.bind(b?.article_id ?? null, String(x.base).slice(0, 120), String(x.meaning_ko).slice(0, 80), x.sentence ? String(x.sentence).slice(0, 400) : null, now, now)));
+  await env.DB.batch(items.map((x) => stmt.bind(aid, String(x.base).slice(0, 120), String(x.meaning_ko).slice(0, 80), x.sentence ? String(x.sentence).slice(0, 400) : null, now, now)));
   return json({ saved: items.length });
 };
 
@@ -173,7 +180,7 @@ type InArticle = Partial<ArticleRow> & { lesson?: unknown };
 /** 작업이 고른 기사 넣기/고치기. 같은 (source, ext_id)면 공부 자료·점수만 바꾼다 */
 const adminPut: Handler = async ({ env, req }) => {
   const b = (await req.json().catch(() => null)) as { items?: InArticle[] } | null;
-  const items = (b?.items ?? []).filter((x) => x?.source && x?.ext_id && x?.url && x?.title && x?.day).slice(0, 10);
+  const items = (b?.items ?? []).filter((x) => x?.source && x?.ext_id && /^https:\/\//.test(String(x?.url ?? '')) && x?.title && x?.day).slice(0, 10);
   if (!items.length) throw bad('no items');
   const now = new Date().toISOString();
   const stmt = env.DB.prepare(
@@ -192,7 +199,7 @@ const adminPut: Handler = async ({ env, req }) => {
 /** 작업용: 이미 넣은 기사 번호 + 최근 main 분야(겹침 피하기) */
 const adminKnown: Handler = async ({ env, url }) => {
   const since = url.searchParams.get('since') ?? '0000-00-00';
-  const r = await env.DB.prepare(`SELECT source, ext_id, day, role, category FROM articles WHERE day >= ? ORDER BY day DESC, id DESC LIMIT 400`).bind(since).all<{ source: string; ext_id: string; day: string; role: string; category: string | null }>();
+  const r = await env.DB.prepare(`SELECT source, ext_id, day, role, category, title FROM articles WHERE day >= ? ORDER BY day DESC, id DESC LIMIT 400`).bind(since).all<{ source: string; ext_id: string; day: string; role: string; category: string | null; title: string }>();
   return json({ items: r.results });
 };
 

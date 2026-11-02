@@ -43,8 +43,9 @@ async function main() {
   const todays = known.filter((k) => k.day === day);
   const hasMain = todays.some((k) => k.role === 'main');
   const extras = todays.filter((k) => k.role === 'extra').length;
-  const wantMain = slot === 'morning' && !hasMain ? 1 : 0;
-  const wantExtra = Math.max(0, 2 - (slot === 'morning' ? 0 : extras));
+  // 아침에 공부 자료가 실패해 main 이 없으면 오후에도 main 을 만든다 · extra 는 하루 목표(아침 2 · 오후까지 3)에서 있는 수를 뺀다(다시 돌려도 안 늘게, 11-02 검토)
+  const wantMain = hasMain ? 0 : 1;
+  const wantExtra = Math.max(0, (slot === 'morning' ? 2 : 3) - extras);
   if (!wantMain && !wantExtra) return console.log('오늘 몫 이미 있음');
 
   const rss = parseKbsRss(await fetchText(RSS_URL, { gapMs: 0 }));

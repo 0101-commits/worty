@@ -68,6 +68,13 @@ async function run(db) {
   out.grade = (await call(db, 'POST', `/api/expressions/${ex[0].id}/grade`, { rating: 3 })).body.state;
   out.bad = (await call(db, 'POST', `/api/expressions/${ex[0].id}/grade`, { rating: 7 })).status;
   out.saved = (await call(db, 'GET', `/api/articles/${id}`)).body.saved;
+  const extraB = (await call(db, 'GET', '/api/admin/articles/known?since=2000-01-01')).body.items.find((x) => x.title === 'Extra B');
+  out.knownTitle = Boolean(extraB);
+  const ids = (await db.prepare(`SELECT id FROM articles WHERE title = 'Extra B'`).first()).id;
+  out.bypass = (await call(db, 'POST', `/api/articles/${ids}/progress`, { opened: true })).status; // 아직 안 연 extra 는 한 편 더로만
+  out.badAid = (await call(db, 'POST', '/api/expressions', { article_id: 99999, items: [{ base: 'auf etwas abzielen', meaning_ko: '목표로 하다' }] })).status;
+  out.badAidNull = (await db.prepare(`SELECT article_id FROM expressions WHERE base = 'auf etwas abzielen'`).first()).article_id;
+  out.httpOnly = (await call(db, 'POST', '/api/admin/articles', { items: [{ source: 'kbs', ext_id: '9', url: 'javascript:alert(1)', title: 'x', day: '2026-11-02' }] })).status;
   out.purge = (await call(db, 'POST', '/api/admin/articles/purge')).body.purged;
   out.known = (await call(db, 'GET', '/api/admin/articles/known?since=2000-01-01')).body.items.length;
   return out;
@@ -88,4 +95,9 @@ test('기사·표현 API: D1 과 Postgres 결과가 같고 규칙대로', async 
   assert.deepEqual(a.saved, ['eine Prüfung einleiten']);
   assert.equal(a.purge, 0, '30일 안 된 본문은 안 지움');
   assert.equal(a.known, 3);
+  assert.equal(a.knownTitle, true, '작업이 최근 기사 제목을 받아 같은 사건을 거른다');
+  assert.equal(a.bypass, 409);
+  assert.equal(a.badAid, 200);
+  assert.equal(a.badAidNull, null, '없는 기사 번호는 null');
+  assert.equal(a.httpOnly, 400, 'https 주소만');
 });
