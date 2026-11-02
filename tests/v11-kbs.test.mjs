@@ -72,3 +72,11 @@ test('acceptLesson: 모양 맞으면 통과, 틀리면 null', () => {
   assert.equal(acceptLesson([{ ...ok[0], sentences: [{ ko: '하나만' }] }], { sentences }), null, '번역 수 틀림');
   assert.equal(acceptLesson([{ ...ok[0], quiz: ok[0].quiz.slice(0, 3) }], { sentences }), null, '퀴즈 3개');
 });
+
+test('extractBody: 사진 기사(사진 상자·설명 지움)', () => {
+  const html = `<div class="body_txt fr-view">
+    <div class="img_box top" id="ele1"><div class="photo no-print"><img src="x.jpg" alt="a"></div><p class="cap no-print">Photo : YONHAP News</p></div>
+    Schnäppchenjäger haben dem Kospi verholfen. <br />\n<br />\nDer Leitindex stieg. <br />
+    <!-- Key word --></div>`;
+  assert.deepEqual(extractBody(html), ['Schnäppchenjäger haben dem Kospi verholfen.', 'Der Leitindex stieg.']);
+});

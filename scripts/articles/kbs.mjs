@@ -34,8 +34,11 @@ export function extractBody(html) {
   const i = s.search(/<div class="body_txt[^"]*">/);
   if (i < 0) return [];
   const rest = s.slice(s.indexOf('>', i) + 1);
-  const end = rest.search(/<!--\s*Key word\s*-->|<!--\s*\/\/body txt\s*-->|<\/div>/);
-  const inner = end < 0 ? rest : rest.slice(0, end);
+  // 사진 기사는 본문 앞에 사진 상자(div.img_box … p.cap)가 들어 있다 → 끝은 주석 표지로만 찾고 사진 상자·설명은 지운다(11-02 실측)
+  const end = rest.search(/<!--\s*Key word\s*-->|<!--\s*\/\/body txt\s*-->/);
+  const inner = (end < 0 ? rest : rest.slice(0, end))
+    .replace(/<div class="img_box[\s\S]*?<\/p>\s*<\/div>/gi, '')
+    .replace(/<p class="cap[^"]*">[\s\S]*?<\/p>/gi, '');
   return inner
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .split(/(?:<br\s*\/?>\s*){2,}/i)
