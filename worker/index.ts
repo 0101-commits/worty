@@ -603,6 +603,12 @@ const putImage: Handler = async ({ req, env, url, params: [id] }) => {
     await env.DB.prepare("UPDATE words SET image_status = 'failed' WHERE id = ?").bind(id).run();
     return json({ ok: true, status: 'failed' });
   }
+  // v11 G2: 두 칸 그림이 세 번 탈락한 추상어 = 그림 없는 단어(예문 카드). 'failed' 와 같이 다시 그리지 않지만 이유를 가른다(이미지 칸은 비움)
+  if (url.searchParams.get('status') === 'text') {
+    await env.DB.prepare("UPDATE words SET image_status = 'text', image_id = NULL WHERE id = ?").bind(id).run();
+    clearMemo(env.DB);
+    return json({ ok: true, status: 'text' });
+  }
   if (!(req.headers.get('content-type') ?? '').startsWith('image/webp')) throw new HttpError(415, 'image/webp only');
   const bytes = await req.arrayBuffer();
   if (bytes.byteLength === 0) throw bad('empty_body');

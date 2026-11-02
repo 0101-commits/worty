@@ -41,6 +41,45 @@ export async function pixelStats(buf) {
   return { edgeWhite: +(edgeWhite / edge).toFixed(3), top4: +top4.toFixed(3), black: +(black / n).toFixed(3) };
 }
 
+/**
+ * 틀(테두리) 검사 — AI 없이 화소로(2026-11-02 G6). 그림 가장자리 가까이(바깥 15% 띠)에 한 변 길이의 70% 이상을 덮는 어두운 직선이
+ * 네 변 중 3변 이상이면 틀. 한 변만 긴 선(바닥 선)은 틀이 아니다. 가운데(40~60%)의 긴 세로선은 두 칸 그림의 칸막이로 따로 센다(틀에 안 셈).
+ * → {edges: 0~4, divider: boolean}
+ */
+export async function frameStats(buf, { cover = 0.7, dark = 110 } = {}) {
+  const w = 256, h = 192;
+  const { data } = await sharp(buf).removeAlpha().resize(w, h, { fit: 'fill' }).greyscale().raw().toBuffer({ resolveWithObject: true });
+  const isDark = (x, y) => data[y * w + x] < dark;
+  // 한 줄(행 y 또는 열 x)이 어두운 비율. 선이 한 화소 흔들리는 걸 봐주려고 옆줄까지 합친다. 구석 5% 는 뺀다
+  const mx = Math.round(w * 0.05), my = Math.round(h * 0.05);
+  const rowCover = (y) => {
+    let n = 0, t = 0;
+    for (let x = mx; x < w - mx; x++) {
+      t++;
+      if (isDark(x, y) || (y > 0 && isDark(x, y - 1)) || (y < h - 1 && isDark(x, y + 1))) n++;
+    }
+    return n / t;
+  };
+  const colCover = (x) => {
+    let n = 0, t = 0;
+    for (let y = my; y < h - my; y++) {
+      t++;
+      if (isDark(x, y) || (x > 0 && isDark(x - 1, y)) || (x < w - 1 && isDark(x + 1, y))) n++;
+    }
+    return n / t;
+  };
+  const bx = Math.round(w * 0.15), by = Math.round(h * 0.15);
+  const best = (from, to, f) => {
+    let m = 0;
+    for (let i = from; i < to; i++) m = Math.max(m, f(i));
+    return m;
+  };
+  const sides = [best(0, by, rowCover), best(h - by, h, rowCover), best(0, bx, colCover), best(w - bx, w, colCover)];
+  const edges = sides.filter((c) => c >= cover).length;
+  const divider = best(Math.round(w * 0.4), Math.round(w * 0.6), colCover) >= cover;
+  return { edges, divider };
+}
+
 /** Windows OCR 로 읽은 글자(공백 뺀) 수. 실패하면 null */
 export function ocrChars(files) {
   if (process.platform !== 'win32' || !files.length) return files.map(() => null);
@@ -63,13 +102,15 @@ export function ocrChars(files) {
 }
 
 /** 판정: 이유 목록이 비면 통과 */
-export function verdict(s, chars) {
+export function verdict(s, chars, frame = null) {
   const why = [];
   if (s.edgeWhite < LIMITS.edgeWhite) why.push(`edge_white ${s.edgeWhite}`);
   if (s.top4 < LIMITS.top4) why.push(`colors ${s.top4}`);
   if (s.black < LIMITS.blackMin || s.black > LIMITS.blackMax) why.push(`black ${s.black}`);
   // 한 글자는 봐준다 — 그려 넣은 ? ! 를 OCR 이 I·l·1·2 로 읽는 일이 있다
   if (chars > 1) why.push(`text ${chars}`);
+  // 틀(G6): 3변 이상에 긴 어두운 선. 두 칸 그림의 가운데 칸막이는 frameStats 가 따로 세어 여기 안 걸린다
+  if (frame && frame.edges >= 3) why.push(`frame ${frame.edges}`);
   return why;
 }
 
@@ -77,8 +118,9 @@ export function verdict(s, chars) {
 export async function checkFile(file, buf) {
   const s = await pixelStats(buf);
   const [chars] = ocrChars([file]);
-  const why = verdict(s, chars);
-  return { ...s, chars, ok: why.length === 0, why };
+  const frame = await frameStats(buf);
+  const why = verdict(s, chars, frame);
+  return { ...s, chars, frame: frame.edges, ok: why.length === 0, why };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -87,7 +129,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   for (const [i, f] of files.entries()) {
     const { readFileSync } = await import('node:fs');
     const s = await pixelStats(readFileSync(f));
-    const why = verdict(s, chars[i]);
-    console.log(JSON.stringify({ file: path.basename(f), ...s, chars: chars[i], ok: why.length === 0, why }));
+    const frame = await frameStats(readFileSync(f));
+    const why = verdict(s, chars[i], frame);
+    console.log(JSON.stringify({ file: path.basename(f), ...s, chars: chars[i], frame: frame.edges, divider: frame.divider, ok: why.length === 0, why }));
   }
 }

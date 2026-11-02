@@ -137,7 +137,7 @@ test('imageWords — 그림이 올라간 단어만(다시 검사용, 질의 한 
   addWord(db, { id: 'w0001', lemma: 'Haus', gender: 'das', gloss_ko: '집', image_status: 'ok' });
   addWord(db, { id: 'w0002', lemma: 'Baum', gloss_ko: '나무', image_status: 'failed' });
   addWord(db, { id: 'w0003', lemma: 'los', gloss_ko: '출발', image_status: 'none' });
-  assert.deepEqual(await imageWords(db), { items: [{ id: 'w0001', lemma: 'Haus', gender: 'das', gloss_ko: '집' }] });
+  assert.deepEqual(await imageWords(db), { items: [{ id: 'w0001', lemma: 'Haus', gender: 'das', gloss_ko: '집', pos: 'noun', level: 'B1' }] });
 });
 import { addReport, addRequest, listChanges, listRequests, revertChange, reviewStats, settleRequest } from '../worker/words.ts';
 

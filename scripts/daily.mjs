@@ -18,7 +18,9 @@ import sharp from 'sharp';
 import { REF_FILE, imagePrompt } from './style.mjs';
 import { checkFile } from './imgcheck.mjs';
 import { askJson } from './ai.mjs';
-import { judgeImages, setJudgeLedger } from './judge.mjs';
+import { judgeImages, setJudgeLedger, setDistractorPool } from './judge.mjs';
+import { FEEDBACK_FILE, SCENES_FILE, SCENE_MAX, SCENE_RULE_SHORT, addFeedback, bannedIn, classifyWord, fewShotBlock, findDuplicateScene, isPinned, isTwoPanel, readJsonFile, roleHint, sceneRulesBlock, sceneShapeOk, stripPin, writeJsonFile } from './scene.mjs';
+import { dhash, loadHashes, nearDuplicate, saveHashes } from './imghash.mjs';
 import { KLEIN4, SCHNELL, DEV, SIZE, ledgerConfig, loadLedger, saveLedger, neuronEstimate, pickModel, hardCandidates, hardSlot, recordDraw, recordAuto, recordJudge, spentToday, dayRec, seedFloor, applyManualDecisions, sentButFailed } from './ledger.mjs';
 import { processPending, sortByVerdict } from './pending.mjs';
 
@@ -61,6 +63,18 @@ const RESTYLE_FILE = path.join(ROOT, '.data', 'restyle.json');
 const DONE_FILE = path.join(ROOT, '.data', 'images-done.json');
 // 검사용 원본(올리기 전)·뜻 검사 모음 그림. git 제외 폴더
 const TMP_DIR = path.join(ROOT, '.data', 'img-tmp');
+// v11(2026-11-02): 겹치는 장면 검사용 장면 색인 · 그림 지각 해시 · 사람 결정(few-shot). 전부 .data/ — daily.yml 이 main 에 되올린다
+const scenesIdx = readJsonFile(SCENES_FILE, {});
+let feedback = readJsonFile(FEEDBACK_FILE, []);
+const hashes = loadHashes();
+const persistState = () => {
+  if (DRY) return;
+  writeJsonFile(SCENES_FILE, scenesIdx);
+  saveHashes(hashes);
+};
+const rememberScene = (id, scene) => {
+  if (scene) scenesIdx[id] = stripPin(scene).slice(0, SCENE_MAX);
+};
 const log = { day: kstDay(), started: new Date().toISOString(), text: 0, images: [], failed: [], quota: null, pending: { before: 0, sent: 0, uploaded: 0, rejected: 0, dropped: 0, left: 0 }, rejected_saved: 0 };
 
 try {
@@ -105,6 +119,14 @@ try {
       if (floor) console.log(`장부 없음/깨짐 — 오늘 그린 ${dd.drawn}번으로 뉴런 바닥 ${Math.round(floor)} 적용`);
     } catch { delete ledger.recovered; /* draw-day 도 없으면 정말 첫 실행 */ }
     setJudgeLedger({ ledger, cfg, day: utcNow, save: saveL });
+    // 눈가림 객관식(judge.mjs)의 보기 낱말 = 그림이 올라간 단어들(같은 품사·등급을 앞세움). 못 받으면 흔한 낱말로 채운다
+    if (!NO_JUDGE) {
+      try {
+        setDistractorPool((await api('/api/admin/images')).items.map((w) => ({ id: w.id, word: `${w.gender ? w.gender + ' ' : ''}${w.lemma}`, meaning_ko: w.gloss_ko, pos: w.pos, level: w.level })));
+      } catch (e) {
+        console.error(`보기 낱말 목록 못 받음 — 흔한 낱말로: ${String(e.message || e).slice(0, 120)}`);
+      }
+    }
     console.log(`장부: 오늘(UTC) 뉴런 ${Math.round(spentToday(ledger, utcNow()))}/${cfg.budget} · ${cfg.manual ? '손 실행(예약 실행 몫 ' + Math.round(cfg.reserve * 100) + '% 남김)' : '예약 실행'}`);
     let quotaOut = false; // 무료 하루 몫을 다 씀(429)
     // 그릴 차례(기획안 v7 C4). --redo 면 그것만. 아니면
@@ -125,6 +147,15 @@ try {
       const rl = (await api('/api/admin/review-log')).items;
       if (rl.length) {
         const ids = applyManualDecisions(ledger, rl, [restyle, fix]);
+        // G7: 사람 결정을 장면과 함께 남긴다(다음 장면 쓰기의 좋은·나쁜 예). 다시 그리기로 정한 단어는 그림이 이미 올라가 있어도 다시 그릴 목록에 넣는다
+        for (const x of rl) {
+          if (!x.ok && !restyle.includes(x.id)) restyle.push(x.id);
+          try {
+            const dw = await api(`/api/word/${x.id}`);
+            feedback = addFeedback(feedback, { id: x.id, lemma: dw.word.lemma, pos: dw.word.pos, scene: dw.scene_en, ok: x.ok === true });
+          } catch { /* 단어를 못 읽으면 그 결정은 예시에서만 빠진다 */ }
+        }
+        if (!DRY) writeJsonFile(FEEDBACK_FILE, feedback);
         if (!DRY) {
           saveRestyle();
           saveL();
@@ -332,6 +363,12 @@ try {
           check = await checkFile(tmp, p);
           try { unlinkSync(tmp); } catch { /* 지우기 실패는 무시 */ }
           if (check.chars === null) ocrSkipped++;
+          // G5(b): 다른 단어의 그림과 거의 같은 그림이면 탈락(지각 해시). 통과하면 해시를 적어 둔다
+          if (check.ok) {
+            const h = await dhash(p);
+            const near = nearDuplicate(w.id, h, hashes);
+            if (near) { check.ok = false; check.why = [`dup_image ${near.id} d=${near.dist}`]; } else hashes[w.id] = h;
+          }
           if (check.ok) {
             png = p;
             recordAuto(ledger, used, true);
@@ -353,7 +390,7 @@ try {
       errStreak = 0;
       return { png, check, why, model: used };
     };
-    const toJudge = (d) => ({ id: d.w.id, word: `${d.w.gender ? d.w.gender + ' ' : ''}${d.w.lemma}`, meaning_ko: d.w.gloss_ko, png: d.png });
+    const toJudge = (d) => ({ id: d.w.id, word: `${d.w.gender ? d.w.gender + ' ' : ''}${d.w.lemma}`, meaning_ko: d.w.gloss_ko, pos: d.w.pos, level: d.w.level, scene: d.scene, png: d.png });
     log.meaning = { judged: 0, retried: 0, failed: 0 };
 
     // BATCH 단어씩: 장면 쓰기(AI) → 그리기 → 뜻 검사(AI) → 탈락은 고친 장면으로 한 번 더 → 올리기.
@@ -364,6 +401,8 @@ try {
       const briefs = await writeScenes(batch);
       for (const w of batch) if (fix.has(w.id)) briefs.set(w.id, fix.get(w.id)); // 다시 검사가 준 몸 구조용 장면이 먼저
       if (briefs.size && !DRY) await api('/api/admin/words', { method: 'POST', body: { items: [...briefs].map(([id, scene_en]) => ({ id, scene_en })) } });
+      for (const [id, sc] of briefs) rememberScene(id, sc);
+      persistState();
       console.log(`새 장면 ${briefs.size}/${batch.length}`);
       const done = [];
       for (const w of batch) {
@@ -409,7 +448,9 @@ try {
             d.why = [`meaning: ${v.why}`];
             // 몫 소진·서버 오류로 다시 그리지 못하면 단어 탓이 아니니 내일 다시(실패 표시 안 함)
             if (stopped()) { d.defer = true; continue; }
-            if (!v.scene) continue;
+            const newScene = v.scene || (await writeScenes([{ ...d.w, scene_en: d.scene }], { why: v.why })).get(d.w.id);
+            if (!newScene) continue;
+            v.scene = newScene;
             log.meaning.retried++;
             const r = await drawChecked(d.w, v.scene);
             if (!r) d.defer = true;
@@ -447,6 +488,7 @@ try {
         pendingTotal++;
         pendingSentToday++;
         log.pending.sent++;
+        if (d.rescene) rememberScene(w.id, d.scene);
         if (d.rescene) await api('/api/admin/words', { method: 'POST', body: { items: [{ id: w.id, scene_en: d.scene }] } }).catch((e) => console.error(String(e.message).slice(0, 200)));
         console.log(`그림 ${w.id} ${w.lemma} 검사 대기로 맡김(대기 ${pendingTotal}장)`);
       }
@@ -459,7 +501,10 @@ try {
           if (d.why?.[0]?.startsWith('meaning')) log.meaning.failed++;
           log.failed.push({ id: w.id, error: d.why?.join(', ') || 'no_image', check: d.check });
           // 다시 그리기면 있던 그림을 지킨다. 새 단어만 실패 표시(머리글자 칸)
-          if (!redo.has(w.id)) await api(`/api/admin/image/${w.id}?status=failed`, { method: 'PUT' }).catch((e) => console.error(String(e.message).slice(0, 200)));
+          // G2: 두 칸 장면이 세 번 탈락(장부 fails ≥ 3)하면 그림 없는 단어(status=text → 예문 카드)로 — 다시 그리지 않는다
+          const textOnly = isTwoPanel(d.scene || w.scene_en) && (ledger.fails[w.id] ?? 0) >= 3;
+          if (textOnly) (log.text_only ??= []).push(w.id);
+          if (!redo.has(w.id) || textOnly) await api(`/api/admin/image/${w.id}?status=${textOnly ? 'text' : 'failed'}`, { method: 'PUT' }).catch((e) => console.error(String(e.message).slice(0, 200)));
           // 예전 그림체 목록에서 탈락하면 예전 그림을 두고 목록에서 뺀다 — 같은 단어에 매일 그리기 몫을 쓰지 않게
           if (restyle.includes(w.id)) {
             restyle.splice(restyle.indexOf(w.id), 1);
@@ -477,6 +522,7 @@ try {
           continue;
         }
         // 뜻 검사가 고친 장면으로 그렸으면 장면도 그것으로(그림·장면이 같은 것을 가리키게). 실패해도 그림은 올라갔으니 계속
+        if (d.rescene) rememberScene(w.id, d.scene);
         if (d.rescene) await api('/api/admin/words', { method: 'POST', body: { items: [{ id: w.id, scene_en: d.scene }] } }).catch((e) => console.error(String(e.message).slice(0, 200)));
         if (restyle.includes(w.id)) restyle.splice(restyle.indexOf(w.id), 1);
         // 참고 그림이 중간에 끊긴 뒤 그린 그림은 생김새가 다를 수 있어 나중에 다시 그리게 목록에 둔다.
@@ -488,6 +534,7 @@ try {
         console.log(`그림 ${w.id} ${w.lemma} ${(webp.length / 1024).toFixed(1)}KB ${((Date.now() - d.t0) / 1000).toFixed(0)}초${d.rescene ? ' (고친 장면)' : ''}`);
       }
     }
+    persistState();
     // G15: 검사 통과율(생성 1번 = 1건)
     log.checks = { drawn: checked, drawn_before: drawnBefore, draw_max: DRAW_MAX, passed: log.images.length, rate: checked ? +(log.images.length / checked).toFixed(2) : null, ocr_skipped: ocrSkipped, ref: !!ref };
     // 뉴런 어림 — 대시보드 실측 한 장 ≈ 109(계산 83.4 의 1.3배, 2026-10-19). 실패 요청은 안 셈
@@ -580,9 +627,9 @@ try {
 
 // ── AI(Gemini)로 글 채우기 ──────────────────────────────────────────────
 async function writeText(words) {
-  const list = words.map((w) => ({ id: w.id, lemma: w.lemma, pos: w.pos, gender: w.gender, level: w.level, gloss_en: w.gloss_en }));
+  const list = words.map((w) => ({ id: w.id, lemma: w.lemma, pos: w.pos, gender: w.gender, level: w.level, gloss_en: w.gloss_en, class_hint: classifyWord(w), ...(roleHint(w.lemma) ? { role_hint: roleHint(w.lemma) } : {}) }));
   const prompt = `You write Korean learning content for German vocabulary (learner: Korean speaker, level B1~B2). For EACH item below return one object:
-{"id": "<same id>", "gloss_ko": "짧은 한국어 뜻 1~3개, 쉼표 구분, 20자 이내(명사는 관사 없이 명사형, 동사는 ~하다 형)", "example_de": "B1~B2 수준의 자연스러운 독일어 예문 1문장, 70자 이내, 표제어(활용형 가능) 포함", "example_ko": "예문의 자연스러운 한국어 번역, 40자 이내, ~해요체", "scene_en": "ONE English line (max 25 words) starting with 'Borti ' — a concrete visual scene where the mascot Borti (a chubby white puppy with tan floppy ears) acts out the word's meaning with ONE concrete prop or action; no text, letters, numbers, signs or logos; only Borti unless a second character is required"}
+{"id": "<same id>", "gloss_ko": "짧은 한국어 뜻 1~3개, 쉼표 구분, 20자 이내(명사는 관사 없이 명사형, 동사는 ~하다 형)", "example_de": "B1~B2 수준의 자연스러운 독일어 예문 1문장, 70자 이내, 표제어(활용형 가능) 포함", "example_ko": "예문의 자연스러운 한국어 번역, 40자 이내, ~해요체", "scene_en": "${SCENE_RULE_SHORT}"}
 Output ONLY a JSON array (no prose, no code fence) with exactly ${list.length} objects in the same order.
 Items: ${JSON.stringify(list)}`;
   const arr = await askJson(prompt);
@@ -596,7 +643,7 @@ Items: ${JSON.stringify(list)}`;
       it.example_de = o.example_de.trim();
       if (typeof o.example_ko === 'string' && o.example_ko.trim()) it.example_ko = o.example_ko.trim().slice(0, 80);
     }
-    if (typeof o.scene_en === 'string' && /^Borti /.test(o.scene_en.trim())) it.scene_en = o.scene_en.trim().slice(0, 300);
+    if (typeof o.scene_en === 'string' && sceneShapeOk(o.scene_en) && !bannedIn(o.scene_en).length) it.scene_en = o.scene_en.trim().slice(0, SCENE_MAX);
     if (Object.keys(it).length > 1) items.push(it);
   }
   return items;
@@ -606,27 +653,66 @@ Items: ${JSON.stringify(list)}`;
 // 2026-10-14 실측(35장 검토): 장면에 장소 + 소품 3개 + 조연까지 넣으면 4b 모델이 소품을 빼먹고 보르티만 크게 그려
 // 뜻 단서가 사라졌다(los 의 기차 · verschwinden 의 빈 열쇠걸이 · einzig 의 무리 · Entscheidung 의 갈림길). → 짧게, 뜻을 맡은 물건 하나를 맨 앞에.
 // 2026-10-16 사용자 「그림이 예문 장면이 됨 — 단어 자체를 그려야」 → 예문은 넘기지 않고 단어·품사·뜻만으로 장면을 쓴다.
-async function writeScenes(words) {
-  const list = words.map((w) => ({ id: w.id, word: `${w.gender ? w.gender + ' ' : ''}${w.lemma}`, pos: w.pos, meaning_ko: w.gloss_ko }));
-  const prompt = `You write image scenes for German vocabulary flashcards. Each card shows the German word, its Korean meaning and a simple doodle. The doodle illustrates the WORD ITSELF — its core dictionary meaning, the way a picture dictionary would — never a particular sentence or story. A small image model draws the scene and drops details, so keep it SIMPLE: one glance at the picture must say the word.
-Rules for each scene (ONE English line, max 28 words and 180 characters, start with "Borti"):
-- Borti (a chubby white puppy) shows the word; when the word has several meanings, draw the first Korean meaning.
-- Begin with the key: the ONE object or action that stands for the word, drawn large.
-  · noun → the thing itself, big and centered, in its most typical form or use (Kühlschrank: Borti opens a big fridge full of food).
-  · verb → the action at its most unmistakable moment (springen: Borti mid-air, jumping over a puddle).
-  · adjective → exaggerate the quality, add a contrasting opposite if it helps (eng: Borti squeezing through a very narrow gap).
-  · abstract word (adverb, conjunction, particle, pronoun, idea) → the most typical everyday situation that shows the concept itself, with ONE clear prop, plus a symbol and Borti's expression (wieso: Borti frowning, a big question mark above his head; Zukunft: Borti looking ahead along a path toward a rising sun).
-- At most 2 props and at most one other character (a puppy or kitten), only if the meaning needs them. Place = one word at most (kitchen, platform), no landscape.
-- A symbol (? ! heart, sweat drop, motion lines, arrow) only when it carries the meaning (? = asking or doubt, ! = urgency or surprise), at most one; no decorative sparkles. No text, letters, numbers, signs, logos, screens with writing or speech bubbles.
-Output ONLY a JSON array [{"id": "...", "scene_en": "..."}] with exactly ${list.length} items in the same order. No prose, no code fence.
-Items: ${JSON.stringify(list)}`;
+// 2026-11-02 v11(G1·G2·G3·G5·G7): 낱말 종류별 규칙(scene.mjs) · 추상어는 두 칸 장면 · 금지 소품/기호 · 겹치는 장면 거절(색인 .data/scenes.json) · 사람 결정 예시(few-shot).
+// [pin] 으로 시작하는 장면(사람이 쓴 것, redraw_v11.sql)은 다시 쓰지 않는다. opts.why = 이 단어 그림이 탈락한 까닭(다시 쓸 때 AI 에게 알림)
+async function writeScenes(words, { why = null } = {}) {
   const out = new Map();
+  const todo = words.filter((w) => !isPinned(w.scene_en));
+  if (!todo.length) return out;
+  const list = todo.map((w) => ({
+    id: w.id,
+    word: `${w.gender ? w.gender + ' ' : ''}${w.lemma}`,
+    pos: w.pos,
+    meaning_ko: w.gloss_ko,
+    class_hint: classifyWord(w),
+    ...(roleHint(w.lemma) ? { role_hint: roleHint(w.lemma) } : {}),
+    ...(why ? { old_scene: stripPin(w.scene_en ?? ''), rejected_because: why } : {}),
+  }));
+  const shots = fewShotBlock(feedback, [...new Set(list.map((x) => x.class_hint))]);
+  const ask = async (items, notes = '') => {
+    const prompt = `You write image scenes for German vocabulary flashcards. Each card shows the German word, its Korean meaning and a simple doodle. The doodle illustrates the WORD ITSELF — its core dictionary meaning, the way a picture dictionary would — never a particular sentence or story.
+${sceneRulesBlock()}
+${shots}${notes}Output ONLY a JSON array [{"id": "...", "class": "concrete|person|action|state|abstract", "scene_en": "..."}] with exactly ${items.length} items in the same order. No prose, no code fence.
+Items: ${JSON.stringify(items)}`;
+    return askJson(prompt);
+  };
+  // 한 장면 검사 → 거절 까닭(없으면 null). 사랑·애정 낱말은 하트 허용
+  const problem = (id, sc, w) => {
+    if (!sceneShapeOk(sc)) return 'must start with "Borti" or "Two panels:"';
+    if (/^\s*Two\s+panel/i.test(sc) && !isTwoPanel(sc)) return 'a two-panel scene must read "Two panels: left — …; right — …"';
+    const bad = bannedIn(sc, { allowHeart: /\b(love|affection|lieb)/i.test(`${w?.gloss_en ?? ''} ${w?.lemma ?? ''}`) });
+    if (bad.length) return `uses forbidden props or symbols: ${bad.join(', ')}`;
+    const dup = findDuplicateScene(id, sc, scenesIdx);
+    if (dup) return `too similar to the scene of another word (${Math.round(dup.overlap * 100)}% shared words): "${dup.scene}" — draw something clearly different`;
+    return null;
+  };
+  const take = (arr, items, rejected) => {
+    const ids = new Set(items.map((x) => x.id));
+    for (const o of Array.isArray(arr) ? arr : []) {
+      if (!ids.has(o?.id) || typeof o.scene_en !== 'string') continue;
+      const sc = o.scene_en.trim().slice(0, SCENE_MAX);
+      const pr = problem(o.id, sc, todo.find((x) => x.id === o.id));
+      if (pr) rejected.set(o.id, pr);
+      else {
+        out.set(o.id, sc);
+        scenesIdx[o.id] = sc; // 같은 묶음 안의 겹침도 잡는다
+      }
+    }
+  };
   try {
-    const arr = await askJson(prompt);
-    const ids = new Set(list.map((w) => w.id));
-    // 「Borti」로 시작하라 했지만 「In a kitchen, Borti …」 처럼 와도 받는다
-    for (const o of arr) if (ids.has(o?.id) && typeof o.scene_en === 'string' && /\bBorti\b/.test(o.scene_en)) out.set(o.id, o.scene_en.trim().slice(0, 300));
-    if (out.size < list.length) console.error(`장면 ${list.length}개 중 ${out.size}개만 받음(나머지는 예전 장면) — 받은 원문 ${arr.length}개: ${JSON.stringify(arr).slice(0, 300)}`);
+    const rejected = new Map();
+    take(await ask(list), list, rejected);
+    // 거절된 것(금지 소품 · 겹침 · 꼴)은 까닭을 알려 한 번 다시 받는다
+    const again = list.filter((x) => rejected.has(x.id));
+    if (again.length) {
+      console.error(`장면 거절 ${again.length}개 → 한 번 다시: ${again.map((x) => `${x.id}(${rejected.get(x.id).slice(0, 50)})`).join(' ')}`);
+      const notes = 'Your previous scenes for these ids were rejected, each for the reason in "rejected_because". Write a different scene that obeys every rule.\n';
+      const retry = again.map((x) => ({ ...x, rejected_because: rejected.get(x.id) }));
+      const rej2 = new Map();
+      take(await ask(retry, notes), retry, rej2);
+      for (const [id, pr] of rej2) console.error(`장면 두 번 거절 ${id}: ${pr.slice(0, 80)} — 예전 장면으로`);
+    }
+    if (out.size < list.length) console.error(`장면 ${list.length}개 중 ${out.size}개만 받음(나머지는 예전 장면)`);
   } catch (e) {
     console.error(`장면 쓰기 실패 — 예전 장면으로 그림: ${String(e.message || e).slice(0, 200)}`);
   }
