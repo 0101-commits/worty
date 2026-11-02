@@ -1,11 +1,14 @@
 // 앱 틀: 접속 키 → 설정 불러오기 → 해시 경로별 화면 + 아래 탭
 import { useEffect, useState } from 'react'
 import { BottomNavigation, BottomNavigationItem, Button, Skeleton, TextField } from './k/index.tsx'
-import { IconBook, IconBookFill, IconCalendar, IconCalendarFill, IconHome, IconHomeFill } from './k/icons.tsx'
+import { IconBook, IconBookFill, IconCalendar, IconCalendarFill, IconHome, IconHomeFill, IconRead, IconReadFill } from './k/icons.tsx'
 import type { Settings } from '../shared/api.ts'
 import { ApiError, MOCK, api, errorText, getToken, prefetchToday, retryUnsent, setToken, setUnauthorizedHandler } from './api.ts'
 import { navigate, useRoute } from './router.ts'
+import Article from './screens/Article.tsx'
 import Artikel from './screens/Artikel.tsx'
+import Expressions from './screens/Expressions.tsx'
+import Read from './screens/Read.tsx'
 import Deck from './screens/Deck.tsx'
 import Drill from './screens/Drill.tsx'
 import Inbox from './screens/Inbox.tsx'
@@ -23,6 +26,7 @@ import { Emoji, ErrorBox, Top, useToaster } from './ui.tsx'
 
 const TABS = [
   { value: 'today', label: '오늘', icon: IconHome, on: IconHomeFill },
+  { value: 'read', label: '읽기', icon: IconRead, on: IconReadFill },
   { value: 'words', label: '단어', icon: IconBook, on: IconBookFill },
   { value: 'stats', label: '기록', icon: IconCalendar, on: IconCalendarFill },
 ]
@@ -148,6 +152,15 @@ export default function App() {
     case 'stats':
       screen = <Stats />
       break
+    case 'read':
+      screen = <Read />
+      break
+    case 'article':
+      screen = <Article id={Number(route.parts[1]) || 0} />
+      break
+    case 'expressions':
+      screen = <Expressions />
+      break
     case 'inbox':
       screen = <Inbox />
       break
@@ -172,7 +185,7 @@ export default function App() {
     default:
       screen = <Today onSettings={save} />
   }
-  const tab = page === 'word' ? 'words' : TABS.some((t) => t.value === page) ? page : ['onboarding', 'inbox', 'settings', 'setup', 'changes', 'image-review'].includes(page) ? '' : 'today'
+  const tab = page === 'word' ? 'words' : page === 'article' || page === 'expressions' ? 'read' : TABS.some((t) => t.value === page) ? page : ['onboarding', 'inbox', 'settings', 'setup', 'changes', 'image-review'].includes(page) ? '' : 'today'
 
   return (
     <div className="app">

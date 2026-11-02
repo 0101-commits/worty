@@ -12,8 +12,8 @@ Return a JSON array with exactly ONE object:
  "summary_ko": [3 short Korean sentences summarizing the article],
  "key": [5 lemmas from "glossary" that matter most for understanding],
  "sentences": [one object per input sentence, same order: {"ko": "natural Korean translation"}],
- "glossary": [up to 40 content words that appear in the text and are B1 or harder (skip A1/A2 basics, names, numbers): {"form": "exact word form as written in the text", "lemma": "dictionary form (nouns capitalized, verbs infinitive, separable verbs joined e.g. einleiten)", "pos": "noun|verb|adj|adv|other", "gender": "der|die|das|null", "gloss_ko": "short Korean meaning in this context", "level": "B1|B2|C1"}],
- "expressions": [6 useful multi-word expressions FROM the text, written in dictionary form with case slots like DW does ("etwas gelingt jemandem", "jemanden zu etwas verpflichten", "eine Sitzung abhalten"): {"base": "...", "meaning_ko": "...", "s": sentence index where it occurs}],
+ "glossary": [15 to 40 content words that appear in the text and are B1 or harder (skip A1/A2 basics, names, numbers): {"form": "exact word form as written in the text", "lemma": "dictionary form (nouns capitalized, verbs infinitive, separable verbs joined e.g. einleiten)", "pos": "noun|verb|adj|adv|other", "gender": "der|die|das|null", "gloss_ko": "short Korean meaning in this context", "level": "B1|B2|C1"}],
+ "expressions": [6 useful multi-word expressions FROM the text, written in dictionary form with case slots like DW does ("etwas gelingt jemandem", "jemanden zu etwas verpflichten", "eine Sitzung abhalten", "auf etwas abzielen"). Prefer verb-centred collocations and fixed noun+verb phrases; never a bare preposition or filler like "gegenüber etwas" / "im Bereich etwas"; put the verb in the infinitive at the end: {"base": "...", "meaning_ko": "...", "s": sentence index where it occurs}],
  "quiz": [exactly 4 questions in this order:
    {"type": "topic", "q_ko": "기사는 무엇에 관한 것인가요?", "options": [4 Korean options], "answer": index},
    {"type": "detail", "q_ko": "a Korean question about a concrete fact in the text", "options": [4 Korean options], "answer": index},

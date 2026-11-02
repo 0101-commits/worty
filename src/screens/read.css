@@ -1,0 +1,77 @@
+/* 읽기 탭 · 기사 화면 · 저장한 표현(v11 4단계). 본문은 --rd-fs(기본 19px) · 줄 간격 175% */
+.read-home, .art { display: flex; flex-direction: column; gap: var(--sp-3); }
+.rd-cap { margin: 0; color: var(--g50); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .02em; }
+.rd-title { margin: 0; font-size: var(--fs-h3); line-height: 1.4; font-weight: 700; word-break: keep-all; overflow-wrap: anywhere; }
+.rd-sub { margin: 0; color: var(--g60); font-size: var(--fs-sm); }
+.rd-today { gap: var(--sp-2); }
+.rd-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 60px; padding: 0 16px; background: var(--g0); border: 1px solid var(--g10); border-radius: var(--r-lg); cursor: pointer; text-align: left; }
+.rd-row span { display: flex; flex-direction: column; }
+.rd-row small { color: var(--g50); font-size: var(--fs-xs); }
+.rd-h { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--g60); }
+.rd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.rd-list button { display: flex; gap: 12px; width: 100%; padding: 12px 2px; border: 0; border-bottom: 1px solid var(--g10); background: transparent; text-align: left; cursor: pointer; }
+.rd-day { flex: none; width: 44px; color: var(--g50); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.rd-li { display: flex; flex-direction: column; min-width: 0; }
+.rd-li b { font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
+.rd-li small { color: var(--g50); font-size: var(--fs-xs); }
+
+.art-bar { display: flex; align-items: flex-end; gap: 10px; }
+.art-bar .k-steps { flex: 1; }
+.art-fs { flex: none; display: inline-flex; align-items: baseline; gap: 2px; height: 36px; padding: 0 10px; border: 1px solid var(--g20); border-radius: var(--r-md); background: var(--g0); font-weight: 700; cursor: pointer; }
+.art-fs small { font-size: 11px; color: var(--g50); }
+.art-step { display: flex; flex-direction: column; gap: var(--sp-3); }
+.art-sum { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.art-key { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.art-key li { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--g10); }
+.art-key li:last-child { border-bottom: 0; }
+.art-key b { font-size: var(--fs-body); }
+.art-key span { grid-column: 1; color: var(--g70); font-size: var(--fs-sm); }
+.art-key .k-badge { grid-column: 2; grid-row: 1; justify-self: end; }
+.art-key small { grid-column: 2; grid-row: 2; justify-self: end; color: var(--g50); font-size: var(--fs-xs); }
+.art-key small.nw-tag { color: var(--warn-50); }
+.art-next { margin-top: var(--sp-2); }
+.art-tools { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
+.art-sw { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--g70); }
+.art-text { display: flex; flex-direction: column; gap: 14px; background: var(--g0); border: 1px solid var(--g10); border-radius: var(--r-lg); padding: 16px; }
+.art-s { margin: 0; font-size: var(--rd-fs, 19px); line-height: var(--lh-read); overflow-wrap: anywhere; }
+.art-s .w { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.art-s .w.nw { border-bottom: 2px dotted var(--warn-icon); }
+.art-s .w:active { background: var(--p5); }
+.art-tr { display: block; margin-top: 4px; font-size: var(--fs-sm); line-height: 1.55; color: var(--g50); }
+.art-one { display: flex; flex-direction: column; gap: var(--sp-3); background: var(--g0); border: 1px solid var(--g10); border-radius: var(--r-lg); padding: 16px; }
+.art-one .art-s { font-size: calc(var(--rd-fs, 19px) + 3px); font-weight: 500; }
+.art-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.art-src { text-decoration: none; }
+.art-mean { margin: 0; font-size: var(--fs-h3); font-weight: 700; }
+.art-ex { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.art-ex button { width: 100%; display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 12px 14px; border: 1px solid var(--g20); border-radius: var(--r-lg); background: var(--g0); cursor: pointer; }
+.art-ex button.on { border: 2px solid var(--p50); background: var(--p5); padding: 11px 13px; }
+.art-ex button:disabled { cursor: default; opacity: .75; }
+.art-ex b { font-size: var(--fs-body); }
+.art-ex span { color: var(--g70); font-size: var(--fs-sm); }
+.art-ex small { color: var(--g50); font-size: var(--fs-xs); line-height: 1.45; }
+.art-q { margin: 0; font-size: var(--fs-h3); font-weight: 700; line-height: 1.5; }
+.art-cloze { font-size: var(--rd-fs, 19px); font-weight: 500; }
+.art-opts { display: grid; grid-template-columns: 1fr; gap: var(--sp-2); }
+.art-opts3 { grid-template-columns: repeat(3, 1fr); }
+.art-opts button { min-height: 52px; padding: 10px 14px; border: 1px solid var(--g20); border-radius: var(--r-lg); background: var(--g0); font-size: var(--fs-body); font-weight: 600; text-align: left; cursor: pointer; }
+.art-opts3 button { text-align: center; }
+.art-opts button.ok { border: 2px solid var(--ok-50); background: var(--ok-5); color: var(--ok-50); }
+.art-opts button.bad { border: 2px solid var(--bad-50); background: var(--bad-5); color: var(--bad-50); }
+.art-opts button.dim { opacity: .5; }
+.art-fb { margin: 0; font-size: var(--fs-h3); font-weight: 800; }
+.art-fb.ok { color: var(--ok-50); } .art-fb.bad { color: var(--bad-50); }
+.art-end { align-items: stretch; text-align: center; padding-top: var(--sp-6); }
+.art-end h2 { margin: 0; font-size: var(--fs-h1); }
+.art-ox { font-size: var(--fs-h2); margin: 0 0 var(--sp-3); }
+
+.ex-list { list-style: none; margin: var(--sp-3) 0 0; padding: 0; }
+.ex-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--g10); }
+.ex-list div { display: flex; flex-direction: column; min-width: 0; }
+.ex-list b { font-size: var(--fs-body); }
+.ex-list span { color: var(--g70); font-size: var(--fs-sm); }
+.ex-list small { color: var(--g50); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.ex-rev { display: flex; flex-direction: column; gap: var(--sp-4); }
+.ex-card { min-height: 260px; justify-content: center; }
+.ex-mean { margin: 0; font-size: var(--fs-h2); font-weight: 700; }
+.ex-base { margin: 0; font-size: var(--fs-h3); font-weight: 700; color: var(--p60); }

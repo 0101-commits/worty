@@ -78,7 +78,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn
 }
 
-async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
   if (MOCK) return (await import('./mock.ts')).mockHandle(method, path, body) as Promise<T>
   const res = await fetch(path, {
     method,

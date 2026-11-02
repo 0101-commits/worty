@@ -15,7 +15,7 @@ const PORT = 4173
 const BASE = `http://localhost:${PORT}/`
 const VITE = join(ROOT, 'node_modules/vite/bin/vite.js')
 
-const ROUTES = ['/onboarding', '/today', '/deck', '/practice?mode=cloze&scope=week&n=10', '/practice?mode=match&scope=week&n=10', '/practice?mode=meaning&scope=all&n=10', '/practice?mode=meaning_rev&scope=all&n=10', '/words', '/word/w004', '/stats', '/inbox', '/settings', '/setup', '/drill?scope=week&n=10', '/artikel', '/changes', '/words?add=Ermittlung&url=https%3A%2F%2Fwww.dw.com%2Fde%2Fx']
+const ROUTES = ['/onboarding', '/today', '/read', '/article/1', '/expressions', '/deck', '/practice?mode=cloze&scope=week&n=10', '/practice?mode=match&scope=week&n=10', '/practice?mode=meaning&scope=all&n=10', '/practice?mode=meaning_rev&scope=all&n=10', '/words', '/word/w004', '/stats', '/inbox', '/settings', '/setup', '/drill?scope=week&n=10', '/artikel', '/changes', '/words?add=Ermittlung&url=https%3A%2F%2Fwww.dw.com%2Fde%2Fx']
 const VIEWPORTS = [
   { name: '390', width: 390, height: 844 },
   { name: '1280', width: 1280, height: 800 },
