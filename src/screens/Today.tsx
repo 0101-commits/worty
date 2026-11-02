@@ -1,106 +1,59 @@
-// 오늘 화면(기획 v8 안 A): 오늘 몫 카드 + 더 공부하기. 덱은 #/deck 에서 넘긴다.
-// 오늘 몫 = 오늘 학습일(04:00 경계)이 끝나기 전에 마감되는 복습 + 아침에 정한 새 단어 — 다 하면 그날은 더 생기지 않는다.
-import { useEffect, useRef, useState } from 'react'
-import { Button, SegmentedControl, SegmentedControlItem, Skeleton } from '../k/index.tsx'
-import { IconChevronRight } from '../k/icons.tsx'
+// 오늘 화면(기획 v11 5절): 「오늘 몫 · N분」 카드 하나(단계 칩 + 「시작」) → 기사 카드 자리 → 「+10개 · 연습 ›」 한 줄.
+// 오늘 몫 = 오늘 학습일(04:00 경계)이 끝나기 전에 마감되는 복습 + 아침에 정한 새 단어 — 세션은 #/session 에서 한 번에.
+import { useCallback, useEffect, useState } from 'react'
+import { BottomSheet, Button, Card, Chip, ProgressBar, SegmentedControl, SegmentedControlItem, Skeleton } from '../k/index.tsx'
+import { IconChevronLeft, IconChevronRight } from '../k/icons.tsx'
 import type { PracticeMode, Settings, TodayResponse } from '../../shared/api.ts'
 import { api, errorText } from '../api.ts'
 import { fmtDay } from '../format.ts'
 import { useAsync } from '../hooks.ts'
 import { MODES } from '../practice.ts'
 import { navigate, useRoute } from '../router.ts'
-import { CountUp, Emoji, ErrorBox, Top, useToaster } from '../ui.tsx'
-
-/** 더 공부하기 목록. 방식을 늘리면 여기 한 줄(문제 꼴은 practice.ts · Practice.tsx) */
-interface Entry {
-  key: string
-  title: string
-  desc: string
-  short: string
-  kind: 'practice' | 'swipe' | 'artikel'
-  mode?: PracticeMode
-  /** 「새」 표시 끝나는 날(학습일) */
-  newUntil?: string
-}
-const NEW_UNTIL = '2026-11-09'
-const ENTRIES: Entry[] = [
-  { key: 'cloze', ...MODES.cloze, kind: 'practice', mode: 'cloze', newUntil: NEW_UNTIL },
-  { key: 'match', ...MODES.match, kind: 'practice', mode: 'match', newUntil: '2026-11-10' },
-  { key: 'meaning', title: '뜻 고르기', desc: '독일어 → 뜻, 뜻 → 독일어', short: '뜻', kind: 'practice', mode: 'meaning', newUntil: NEW_UNTIL },
-  { key: 'write', ...MODES.write, kind: 'practice', mode: 'write', newUntil: '2026-11-12' },
-  { key: 'artikel', title: '관사 1분', desc: 'der · die · das 빠르게', short: '관사', kind: 'artikel' },
-  { key: 'swipe', title: '다시 넘겨 보기', desc: '배운 카드를 넘기며 뜻 확인', short: '넘김', kind: 'swipe' },
-]
-
-/** 한 장 ≈ 6초(알림 「약 N분」과 같은 셈 — worker/discord.ts minutesFor) */
-const minutesFor = (n: number) => Math.max(1, Math.ceil((n * 6) / 60))
+import { minutesFor, todayCounts } from '../session.ts'
+import { MODE_NAME, T } from '../text.ts'
+import { CountUp, ErrorBox, Top, useToaster } from '../ui.tsx'
+import './today.css'
 
 export default function Today({ onSettings }: { onSettings: (p: Partial<Settings>) => Promise<void> }) {
-  // 알림의 빈칸 문제 링크(?first=)는 덱으로 바로
+  // 알림의 빈칸 문제 링크(?first=)는 세션으로 바로
   const first = useRoute().query.get('first')
   useEffect(() => {
-    if (first) navigate(`/deck?first=${encodeURIComponent(first)}`, true)
+    if (first) navigate(`/session?first=${encodeURIComponent(first)}`, true)
   }, [first])
-  // 덱으로 바로 갈 거면 여기서 받지 않는다(미리 받은 오늘 몫은 덱이 쓴다)
+  // 세션으로 바로 갈 거면 여기서 받지 않는다(미리 받은 오늘 몫은 세션이 쓴다)
   const today = useAsync(() => (first ? new Promise<TodayResponse>(() => {}) : api.today()), [])
-  const [sheet, setSheet] = useState<Entry | null>(null)
+  const [sheet, setSheet] = useState(false)
+  const closeSheet = useCallback(() => setSheet(false), [])
   const d = today.data
   return (
     <>
-      <Top title="오늘" actions />
-      <main className="page">
+      <Top title={T.today} actions />
+      <main className="page td">
         {d ? (
           <PlanCard key={d.date} d={d} onSettings={onSettings} onChanged={today.reload} />
         ) : today.error ? (
           <ErrorBox error={today.error} onRetry={today.reload} />
         ) : (
-          <Skeleton variant="rectangle" width="100%" height={196} radius={20} />
+          <Skeleton variant="rectangle" width="100%" height={184} radius={12} />
         )}
-        <section className="more" aria-labelledby="more-h">
-          <div className="more-h">
-            <h2 id="more-h">더 공부하기</h2>
-            <span className="small muted">틀리면 오늘 복습에 다시</span>
-          </div>
-          <ul className="more-list">
-            {ENTRIES.map((e) => (
-              <li key={e.key}>
-                <button
-                  type="button"
-                  className="more-row"
-                  onClick={() => (e.kind === 'artikel' ? navigate('/artikel') : setSheet(e))}
-                >
-                  <span className="more-ico" aria-hidden>
-                    {e.short}
-                  </span>
-                  <span className="more-t">
-                    <b>
-                      {e.title}
-                      {e.newUntil && d && d.date <= e.newUntil && <span className="new-badge">새</span>}
-                    </b>
-                    <span className="small muted">{e.desc}</span>
-                  </span>
-                  <IconChevronRight className="more-chev" aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <ArticleSlot />
+        <div className="td-more">
+          <Button size="large" variant="outlined" color="primary" onClick={() => navigate('/session?more=1')}>
+            {T.more10}
+          </Button>
+          <Button size="large" variant="outlined" color="assistive" onClick={() => setSheet(true)}>
+            {T.practice} <IconChevronRight size={18} aria-hidden />
+          </Button>
+        </div>
       </main>
-      <StartSheet entry={sheet} studiedToday={(d?.plan.done ?? 0) > 0} onClose={() => setSheet(null)} />
+      <PracticeSheet open={sheet} studiedToday={(d?.plan.done ?? 0) > 0} onClose={closeSheet} />
     </>
   )
 }
 
-function Ring({ done, total }: { done: number; total: number }) {
-  const p = total ? Math.round((done / total) * 100) : 100
-  return (
-    <div className="ring" style={{ ['--p' as string]: p }} role="img" aria-label={`오늘 몫 ${total}장 중 ${done}장 끝`}>
-      <span className="num">
-        {done}
-        <small>/{total}</small>
-      </span>
-    </div>
-  )
+/** 오늘의 기사 카드 자리(4단계 「읽기」가 채운다). 지금은 아무것도 그리지 않는다 */
+function ArticleSlot() {
+  return null
 }
 
 function PlanCard({ d, onSettings, onChanged }: { d: TodayResponse; onSettings: (p: Partial<Settings>) => Promise<void>; onChanged: () => void }) {
@@ -110,169 +63,209 @@ function PlanCard({ d, onSettings, onChanged }: { d: TodayResponse; onSettings: 
   const { total, done, extra, extra_max } = d.plan
   const reviewOnly = d.settings.review_only_day === d.date
   const away = d.settings.vacation_until && d.settings.vacation_until >= d.date ? d.settings.vacation_until : ''
-  const canMore = !reviewOnly && extra < extra_max
+  const c = todayCounts(d)
 
+  // 복습만(B6): 이 학습일만 새 카드 0. 다음 학습일엔 저절로 풀린다
   const setReviewOnly = async (on: boolean) => {
     await onSettings({ review_only_day: on ? d.date : '' })
     onChanged()
   }
+  // 새 단어 +5(D3): 오늘 목록 뒤에 5개. 하루 상한까지
   const more = async () => {
     setBusy(true)
     try {
       const t = await api.todayMore()
-      if (t.plan.extra === extra) toast('더 받을 새 단어가 없어요. 레벨을 올리면 더 나와요.', 'cautionary')
+      if (t.plan.extra === extra) toast(T.newPlusNone, 'cautionary')
       onChanged()
     } catch (e) {
-      toast(`새 단어를 못 받았어요 · ${errorText(e)}`, 'negative')
+      toast(`${T.newPlusFail} · ${errorText(e)}`, 'negative')
     } finally {
       setBusy(false)
     }
   }
+  const reviewOnlyChip = (d.fresh.length > 0 || reviewOnly) && (
+    <Chip className="td-ro" active={reviewOnly} aria-pressed={reviewOnly} onClick={() => setReviewOnly(!reviewOnly)}>
+      {T.reviewOnly}
+    </Chip>
+  )
+  const awayNote = away && <p className="small muted">{T.away(fmtDay(away))}</p>
 
   // 남은 카드가 있음 → 시작 · 이어서
   if (left > 0) {
     return (
-      <section className="plan" aria-label="오늘 몫">
-        <div className="plan-top">
-          <Ring done={done} total={total} />
-          <div className="plan-txt">
-            <h1>{done > 0 ? '오늘 몫 · 이어서' : '오늘 몫'}</h1>
-            <p className="small">
-              {d.due.length > 0 && `복습 ${d.due.length}`}
-              {d.due.length > 0 && d.fresh.length > 0 && ' · '}
-              {d.fresh.length > 0 && `새 단어 ${d.fresh.length}`} · 약 {minutesFor(left)}분
-            </p>
-            {away && <p className="small muted">휴가 모드 · {fmtDay(away)}까지 알림을 쉬어요</p>}
-          </div>
+      <Card className="td-plan" aria-label={T.plan}>
+        <div className="td-head">
+          <h1>{T.planMin(minutesFor(left))}</h1>
+          {reviewOnlyChip}
         </div>
-        <Button fullWidth size="large" onClick={() => navigate('/deck')}>
-          {done > 0 ? `이어서 ${left}장` : '시작'}
-        </Button>
-        {done === 0 && (d.fresh.length > 0 || reviewOnly) && (
-          <button type="button" className={'revonly' + (reviewOnly ? ' on' : '')} aria-pressed={reviewOnly} onClick={() => setReviewOnly(!reviewOnly)}>
-            {reviewOnly ? '복습만 · 끄기' : '오늘은 복습만'}
-          </button>
+        <ul className="td-steps" aria-label="단계">
+          {c.review > 0 && (
+            <li>
+              {T.stepReview} <b className="num">{c.review}</b>
+            </li>
+          )}
+          {c.fresh > 0 && (
+            <li>
+              {T.stepNew} <b className="num">{c.fresh}</b>
+            </li>
+          )}
+          {c.quiz > 0 && (
+            <li>
+              {T.stepQuiz} <b className="num">{c.quiz}</b>
+            </li>
+          )}
+        </ul>
+        {done > 0 && (
+          <div className="td-prog">
+            <ProgressBar value={done / Math.max(1, total)} label={`${T.plan} ${total}장 중 ${done}장 끝`} />
+            <span className="small num">
+              {done} / {total}
+            </span>
+          </div>
         )}
-      </section>
+        {awayNote}
+        <Button fullWidth size="large" onClick={() => navigate('/session')}>
+          {done > 0 ? T.resume : T.start}
+        </Button>
+      </Card>
     )
   }
 
-  // 오늘 몫 끝(또는 처음부터 없음) → 결과 · 새 단어 더
+  // 오늘 몫 끝(또는 처음부터 없음) → O · X · 내일 복습 · 새 단어 +5
   const ended = total > 0
   return (
-    <section className="plan" aria-label="오늘 몫">
-      <div className="plan-top">
-        <Emoji name={ended ? 'happy' : 'sleep'} size={76} />
-        <div className="plan-txt">
-          <h1>{ended ? '오늘 몫 끝' : '오늘 몫이 없어요'}</h1>
-          {ended ? (
-            <p className="small">
-              {total}장 끝 · <Tomorrow />
-            </p>
-          ) : (
-            <p className="small">{reviewOnly ? '오늘은 복습만 하기로 했고, 복습할 카드가 없어요.' : '복습할 카드도 새 단어도 없어요.'}</p>
-          )}
-          {away && <p className="small muted">휴가 모드 · {fmtDay(away)}까지 알림을 쉬어요</p>}
-        </div>
+    <Card className="td-plan" aria-label={T.plan}>
+      <div className="td-head">
+        <h1>{ended ? T.planDone : T.planEmpty}</h1>
+        {!ended && reviewOnlyChip}
       </div>
-      {ended && (
-        <div className="plan-mini">
-          <div>
-            <b className="num">{d.ratings.good}</b>좋음 · 쉬움
-          </div>
-          <div>
-            <b className="num">{d.ratings.again}</b>다시 · 어려움
-          </div>
-        </div>
+      {ended ? (
+        <p className="td-ox">
+          <span className="o">
+            {T.o} <b className="num">{d.ratings.good}</b>
+          </span>
+          <span className="x">
+            {T.x} <b className="num">{d.ratings.again}</b>
+          </span>
+          <span className="small muted">
+            <Tomorrow />
+          </span>
+        </p>
+      ) : (
+        <p className="small">{reviewOnly ? T.planEmptyReviewOnly : T.planEmptyDesc}</p>
       )}
+      {awayNote}
       {reviewOnly ? (
         <Button fullWidth variant="outlined" color="primary" onClick={() => setReviewOnly(false)}>
-          새 단어 오늘 받기
+          {T.reviewOnly} · 끄기
         </Button>
       ) : (
-        canMore && (
+        extra < extra_max && (
           <>
             <Button fullWidth variant="outlined" color="primary" loading={busy} onClick={more}>
-              새 단어 5개 {ended ? '더 ' : ''}받기
+              {T.newPlus}
             </Button>
-            <p className="small muted center">
-              내일부터 복습이 그만큼 늘어요{extra > 0 ? ` · 오늘 ${extra}/${extra_max}개 더 받음` : ''}
-            </p>
+            <p className="small muted center">{T.newPlusNote(extra, extra_max)}</p>
           </>
         )
       )}
-    </section>
+    </Card>
   )
 }
 
-/** 내일 볼 카드 수(오늘 몫을 끝냈을 때만 부른다) */
+/** 내일 복습 수(오늘 몫을 끝냈을 때만 부른다) */
 function Tomorrow() {
   const st = useAsync(() => api.stats(), [])
-  return <>내일 {st.data ? <CountUp value={st.data.due_tomorrow} /> : <span className="num">…</span>}장</>
+  return <>{T.tomorrow('')}{st.data ? <CountUp value={st.data.due_tomorrow} /> : <span className="num">…</span>}</>
 }
 
-const PRACTICE_SCOPES: Array<[string, string]> = [
-  ['today', '오늘 본 단어'],
-  ['week', '최근 7일'],
-  ['all', '배운 전체'],
-  ['wrong', '틀린 단어'],
+/** 연습 목록(6절: 빈칸 · 짝 · 뜻 · 쓰기 · 관사 · 넘겨 보기). 방식을 늘리면 여기 한 줄(문제 꼴은 practice.ts · Quiz.tsx) */
+interface Entry {
+  key: keyof typeof MODE_NAME
+  desc: string
+  mode?: PracticeMode
+}
+const ENTRIES: Entry[] = [
+  { key: 'cloze', desc: MODES.cloze.desc, mode: 'cloze' },
+  { key: 'match', desc: MODES.match.desc, mode: 'match' },
+  { key: 'meaning', desc: '독일어 → 뜻, 뜻 → 독일어', mode: 'meaning' },
+  { key: 'write', desc: MODES.write.desc, mode: 'write' },
+  { key: 'artikel', desc: 'der · die · das 1분' },
+  { key: 'swipe', desc: '배운 카드를 넘기며 뜻 확인' },
+]
+const SCOPES: Array<[string, string]> = [
+  ['today', T.scopeToday],
+  ['week', T.scopeWeek],
+  ['all', T.scopeAll],
+  ['wrong', T.scopeWrong],
 ]
 
-/** 방식 고르면 뜨는 창: 범위 × 분량(뜻 고르기는 방향도) → 시작 */
-function StartSheet({ entry, studiedToday, onClose }: { entry: Entry | null; studiedToday: boolean; onClose: () => void }) {
-  const dlg = useRef<HTMLDialogElement>(null)
-  const swipe = entry?.kind === 'swipe'
+/** 「연습 ›」 바텀시트: 목록 → (범위 × 분량 · 뜻은 방향) → 시작. 관사는 바로 */
+function PracticeSheet({ open, studiedToday, onClose }: { open: boolean; studiedToday: boolean; onClose: () => void }) {
+  const [entry, setEntry] = useState<Entry | null>(null)
   const [scope, setScope] = useState('today')
   const [n, setN] = useState('10')
   const [dir, setDir] = useState<'meaning' | 'meaning_rev'>('meaning')
-  useEffect(() => {
-    if (!entry) return
+  const swipe = entry?.key === 'swipe'
+  // 고정 함수: BottomSheet 가 onClose 가 바뀔 때마다 시트에 초점을 다시 옮긴다
+  const close = useCallback(() => {
+    setEntry(null)
+    onClose()
+  }, [onClose])
+  const pick = (e: Entry) => {
+    if (e.key === 'artikel') {
+      close()
+      navigate('/artikel')
+      return
+    }
     // 오늘 아직 안 했으면 「최근 7일」부터
     setScope(studiedToday ? 'today' : 'week')
     setN('10')
-    if (!dlg.current?.open) dlg.current?.showModal()
-  }, [entry, studiedToday])
-  const close = () => dlg.current?.close()
+    setEntry(e)
+  }
   const start = () => {
     if (!entry) return
-    const path = swipe
-      ? `/drill?scope=${scope}&n=${n}`
-      : `/practice?mode=${entry.mode === 'meaning' ? dir : entry.mode}&scope=${scope}&n=${n}`
+    const path = swipe ? `/drill?scope=${scope}&n=${n}` : `/practice?mode=${entry.mode === 'meaning' ? dir : entry.mode}&scope=${scope}&n=${n}`
     close()
     navigate(path)
   }
-  const scopes = swipe ? PRACTICE_SCOPES.slice(0, 3) : PRACTICE_SCOPES
+  const scopes = swipe ? SCOPES.slice(0, 3) : SCOPES
   const sizes = swipe ? ['10', '30', '50'] : ['10', '20', '30']
   return (
-    <dialog
-      ref={dlg}
-      className="sheet-dlg"
-      aria-label={entry ? `${entry.title} 시작` : '연습 시작'}
-      onClick={(e) => e.target === dlg.current && close()}
-      onClose={onClose}
-    >
-      {entry && (
-        <div className="sheet-in">
-          <h2>{entry.title}</h2>
+    <BottomSheet open={open} onClose={close} title={entry ? MODE_NAME[entry.key] : T.practiceTitle}>
+      {!entry ? (
+        <ul className="td-modes">
+          {ENTRIES.map((e) => (
+            <li key={e.key}>
+              <button type="button" className="td-mode" onClick={() => pick(e)}>
+                <b>{MODE_NAME[e.key]}</b>
+                <span className="small muted">{e.desc}</span>
+                <IconChevronRight className="td-chev" size={20} aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="td-opts">
           <p className="small muted">{entry.desc}</p>
           {entry.mode === 'meaning' && (
             <>
-              <p className="sheet-l">방향</p>
+              <p className="td-l">{T.dirLabel}</p>
               <SegmentedControl size="small" value={dir} onValueChange={(v) => setDir(v as typeof dir)}>
-                <SegmentedControlItem value="meaning">독일어 → 뜻</SegmentedControlItem>
-                <SegmentedControlItem value="meaning_rev">뜻 → 독일어</SegmentedControlItem>
+                <SegmentedControlItem value="meaning">{T.dirMeaning}</SegmentedControlItem>
+                <SegmentedControlItem value="meaning_rev">{T.dirRev}</SegmentedControlItem>
               </SegmentedControl>
             </>
           )}
-          <p className="sheet-l">어떤 단어로</p>
-          <div className={'sheet-grid' + (scopes.length === 4 ? ' four' : '')} role="radiogroup" aria-label="범위">
+          <p className="td-l">{T.scopeLabel}</p>
+          <div className="td-scopes" role="radiogroup" aria-label={T.scopeLabel}>
             {scopes.map(([v, l]) => (
-              <button key={v} type="button" role="radio" aria-checked={scope === v} className={'pill' + (scope === v ? ' on' : '')} onClick={() => setScope(v)}>
+              <Chip key={v} role="radio" aria-checked={scope === v} active={scope === v} onClick={() => setScope(v)}>
                 {l}
-              </button>
+              </Chip>
             ))}
           </div>
-          <p className="sheet-l">{swipe ? '몇 장' : entry.mode === 'match' ? '몇 단어' : '몇 문제'}</p>
+          <p className="td-l">{T.sizeLabel}</p>
           <SegmentedControl size="small" value={n} onValueChange={setN}>
             {sizes.map((v) => (
               <SegmentedControlItem key={v} value={v}>
@@ -280,17 +273,15 @@ function StartSheet({ entry, studiedToday, onClose }: { entry: Entry | null; stu
               </SegmentedControlItem>
             ))}
           </SegmentedControl>
-          <p className="small muted">
-            {swipe ? '모르면 줄 뒤로 가요. 복습 일정은 그대로예요.' : '틀린 단어는 「아직 잘 모르는 단어」가 되어 오늘 복습에 다시 나와요.'}
-          </p>
-          <div className="sheet-act">
-            <Button variant="outlined" color="assistive" onClick={close}>
-              닫기
+          <p className="small muted">{swipe ? T.swipeNote : T.practiceNote}</p>
+          <div className="td-act">
+            <Button variant="outlined" color="assistive" leadingContent={<IconChevronLeft size={18} aria-hidden />} onClick={() => setEntry(null)}>
+              {T.practiceBack}
             </Button>
-            <Button onClick={start}>시작</Button>
+            <Button onClick={start}>{T.start}</Button>
           </div>
         </div>
       )}
-    </dialog>
+    </BottomSheet>
   )
 }

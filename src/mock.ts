@@ -216,7 +216,7 @@ function applyReviews(body: ReviewsRequest) {
     const days = r.rating === 1 ? 0 : r.rating === 2 ? 1 : r.rating === 3 ? 3 : 8
     if (c.state === 0) newGraded.add(c.word_id)
     gradedToday.add(c.word_id)
-    if (r.rating >= 3) rated.good++
+    if (r.rating >= 2) rated.good++
     else rated.again++
     Object.assign(c, { state: r.rating === 1 ? 3 : 2, due: later(days || 0.01), reps: c.reps + 1, lapses: c.lapses + (r.rating === 1 ? 1 : 0), last_review: r.reviewed_at, scheduled_days: days })
     if (!touched.includes(c)) touched.push(c)

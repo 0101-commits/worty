@@ -54,6 +54,13 @@ export interface DeckState extends DeckSnapshot {
 
 export type DeckAction =
   | { type: 'grade'; rating: Rating; at: string }
+  /**
+   * 한 화면에 여러 카드(짝 맞추기): 지금 카드 + 줄 앞쪽의 카드들을 줄 차례로 하나씩 채점(grades 는 맞춘 차례라도 된다).
+   * 카드마다 채점 하나(오늘 판 뒤로 보내기 규칙도 그대로). 되돌리기는 묶음 전체를 한 번에
+   */
+  | { type: 'gradeMany'; grades: Array<{ word_id: string; rating: Rating; at: string }> }
+  /** 채점 없이 다음 카드로(「⋯ › 넘기기」). 카드는 오늘 몫에 그대로 남는다 */
+  | { type: 'skip' }
   | { type: 'undo' }
   | { type: 'flush' }
   | { type: 'reset'; queue: DeckItem[] }
@@ -145,6 +152,25 @@ export function deckReducer(s: DeckState, a: DeckAction): DeckState {
       }
       const index = s.index + 1
       return { ...s, queue, index, pending, reshows, history: snapshot, finished: index >= queue.length }
+    }
+    case 'gradeMany': {
+      if (s.finished || !a.grades.length) return s
+      const rest = s.queue.slice(s.index)
+      const pos = (id: string) => rest.findIndex((it) => it.word.id === id)
+      // 줄 차례로(맞춘 차례와 상관없이). 지금 카드가 들어 있어야 하고, 줄에 없거나 겹친 카드가 섞이면 아무것도 안 한다
+      const grades = [...a.grades].sort((x, y) => pos(x.word_id) - pos(y.word_id))
+      const ids = grades.map((g) => g.word_id)
+      if (pos(ids[0]) !== 0 || new Set(ids).size !== ids.length || ids.some((id) => pos(id) < 0)) return s
+      // 고른 카드를 지금 자리부터 차례로 모은 뒤 하나씩 채점(판 뒤로 보내는 자리 index+6 은 모은 칸 너머)
+      const picked = ids.map((id) => rest[pos(id)])
+      let t: DeckState = { ...s, queue: [...s.queue.slice(0, s.index), ...picked, ...rest.filter((it) => !ids.includes(it.word.id))] }
+      for (const g of grades) t = deckReducer(t, { type: 'grade', rating: g.rating, at: g.at })
+      return { ...t, history: { queue: s.queue, index: s.index, pending: s.pending, reshows: s.reshows } }
+    }
+    case 'skip': {
+      if (s.finished) return s
+      const index = s.index + 1
+      return { ...s, index, history: { queue: s.queue, index: s.index, pending: s.pending, reshows: s.reshows }, finished: index >= s.queue.length }
     }
     case 'undo': {
       if (!s.history) return s

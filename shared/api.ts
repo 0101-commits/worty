@@ -88,7 +88,7 @@ export interface TodayResponse {
     extra: number;
     extra_max: number;
   };
-  /** 오늘 채점 수: 좋음·쉬움 / 다시·어려움 */
+  /** 오늘 채점 수: good = O(어려움·좋음·쉬움) / again = X(다시). v11 부터 어려움 = 늦게 맞힘 */
   ratings: { good: number; again: number };
   settings: Settings;
 }

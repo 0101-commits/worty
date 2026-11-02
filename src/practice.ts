@@ -1,9 +1,10 @@
 // 학습 방식 틀(기획 v8 과제 4): 재료(배운 카드 + 보기 재료) → 문제 만들기 → 결과.
-// 새 방식을 넣을 때는 여기 MODES 에 한 줄 + 문제 만들기 한 개, 화면은 screens/Practice.tsx 에 문제 꼴 하나.
+// 새 방식을 넣을 때는 여기 MODES 에 한 줄 + 문제 만들기 한 개, 화면은 screens/Quiz.tsx 에 문제 꼴 하나(세션 · 연습 공용).
 // React 없음(시험에서 바로 부른다).
 import type { DeckItem, PoolWord, PracticeMode } from '../shared/api.ts'
 import { findWord } from '../shared/cloze.ts'
 import { isWeak, shuffle } from './deck.ts'
+import { MODE_NAME } from './text.ts'
 
 export interface ModeInfo {
   title: string
@@ -12,11 +13,11 @@ export interface ModeInfo {
   short: string
 }
 export const MODES: Record<PracticeMode, ModeInfo> = {
-  cloze: { title: '예문 빈칸 고르기', desc: '빈칸에 맞는 단어를 4개 중에서', short: '빈칸' },
-  match: { title: '짝 맞추기', desc: '독일어 5개와 뜻 5개를 짝지어 누르기', short: '짝' },
-  meaning: { title: '뜻 고르기', desc: '독일어를 보고 뜻 고르기', short: '뜻' },
-  meaning_rev: { title: '독일어 고르기', desc: '뜻을 보고 독일어 고르기', short: '독일어' },
-  write: { title: '독일어 쓰기', desc: '뜻을 보고 독일어 쓰기', short: '쓰기' },
+  cloze: { title: MODE_NAME.cloze, desc: '예문 빈칸에 맞는 단어를 4개 중에서', short: '빈칸' },
+  match: { title: MODE_NAME.match, desc: '독일어 5개와 뜻 5개를 짝지어 누르기', short: '짝' },
+  meaning: { title: MODE_NAME.meaning, desc: '독일어를 보고 뜻 고르기', short: '뜻' },
+  meaning_rev: { title: MODE_NAME.meaning, desc: '뜻을 보고 독일어 고르기', short: '뜻' },
+  write: { title: MODE_NAME.write, desc: '뜻을 보고 독일어 쓰기', short: '쓰기' },
 }
 
 /** 보기 하나. id = 단어 id(정답 판정), text = 보이는 글, word = 그 보기 단어(답한 뒤 뜻·독일어를 보여 준다) */
@@ -81,7 +82,7 @@ const glossParts = (g: string | null) => new Set((g ?? '').split(/[,·;/]/).map(
 const overlaps = (a: Set<string>, b: Set<string>) => [...a].some((g) => b.has(g))
 
 /** 카드 단어 → 보기 재료 꼴 */
-const poolOf = (w: DeckItem['word']): PoolWord => ({ id: w.id, lemma: w.lemma, pos: w.pos, gender: w.gender, gloss_ko: w.gloss_ko })
+export const poolOf = (w: DeckItem['word']): PoolWord => ({ id: w.id, lemma: w.lemma, pos: w.pos, gender: w.gender, gloss_ko: w.gloss_ko })
 
 /**
  * 오답 3개: 같은 품사 먼저, 모자라면 다른 품사. 정답과 표제어 · 뜻 조각이 겹치는 것, 서로 같은 글은 뺀다.
@@ -130,7 +131,7 @@ export function makeQuestion(mode: ChoiceQ['mode'], item: DeckItem, pool: PoolWo
 }
 
 /** 한 판에 같이 두면 짝이 둘이 되는 두 단어: 표제어 · 보이는 독일어 · 뜻(조각)이 겹침 */
-const clash = (a: DeckItem['word'], b: DeckItem['word']) =>
+export const clash = (a: DeckItem['word'], b: DeckItem['word']) =>
   fold(bare(a.lemma)) === fold(bare(b.lemma)) || withArticle(a) === withArticle(b) || overlaps(glossParts(a.gloss_ko), glossParts(b.gloss_ko))
 
 /**
@@ -160,6 +161,17 @@ export function makeMatches(items: DeckItem[], n: number, rand: () => number = M
         right: shuffle(pairs.map((p) => ({ id: p.word.id, text: p.word.gloss_ko!, word: p.word })), rand),
       }
     })
+}
+
+/** 정해 둔 단어들로 짝 맞추기 한 판(세션용: 다시 나누지 않는다 — 단어마다 채점 하나가 꼭 나오게). 서로 겹치는 단어는 부르는 쪽이 거른다 */
+export function matchOf(items: DeckItem[], rand: () => number = Math.random): MatchQ {
+  const pairs = items.map((it) => poolOf(it.word))
+  return {
+    mode: 'match',
+    items,
+    left: shuffle(pairs.map((w) => ({ id: w.id, text: withArticle(w), word: w })), rand),
+    right: shuffle(pairs.map((w) => ({ id: w.id, text: w.gloss_ko ?? '', word: w })), rand),
+  }
 }
 
 /** 섞은 뒤 약한 단어(잊은 4번 이상)를 앞으로 — 단, 앞에 서는 약한 단어는 문제 수 n 의 절반(올림)까지. 나머지 약한 단어는 일반 단어 뒤로 */
