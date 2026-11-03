@@ -171,10 +171,13 @@ export const api = {
     // 못 보내면 기기에 남겼다가 다음에 열 때 다시(서버는 같은 단어·시각을 두 번 적지 않는다)
     const id = practiceId(body)
     writePractice([...readPractice().filter((u) => u.id !== id), { id, body }])
-    const p = request<PracticeSaveResponse>('POST', '/api/practice', body, keepalive).then((r) => {
-      writePractice(readPractice().filter((u) => u.id !== id))
-      return r
-    })
+    practiceFlying.add(id) // 보내는 중에는 다시 보내기(retryUnsent)가 같은 것을 또 보내지 않게
+    const p = request<PracticeSaveResponse>('POST', '/api/practice', body, keepalive)
+      .then((r) => {
+        writePractice(readPractice().filter((u) => u.id !== id))
+        return r
+      })
+      .finally(() => practiceFlying.delete(id))
     inflight = inflight.then(() => p).catch(() => undefined)
     return p
   },
@@ -259,6 +262,7 @@ const readPractice = (): UnsentPractice[] => {
   }
 }
 const writePractice = (list: UnsentPractice[]) => save(PRACTICE_KEY, list.length ? JSON.stringify(list) : null)
+const practiceFlying = new Set<string>()
 const practiceId = (b: PracticeResultsRequest) => `${b.mode}:${b.results[0]?.at}:${b.results.length}`
 
 const unsentId = (req: ReviewsRequest) => `${req.session_id}:${req.reviews[0]?.reviewed_at}:${req.reviews.length}`
@@ -297,11 +301,15 @@ export function retryUnsent(): Promise<number> {
       }
     }
     for (const u of readPractice()) {
+      if (practiceFlying.has(u.id)) continue
+      practiceFlying.add(u.id)
       try {
         await request<PracticeSaveResponse>('POST', '/api/practice', u.body)
         writePractice(readPractice().filter((x) => x.id !== u.id))
       } catch {
         break
+      } finally {
+        practiceFlying.delete(u.id)
       }
     }
     return sent

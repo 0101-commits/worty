@@ -73,15 +73,20 @@ export async function addFromArticle(db: D1Database, articleId: number, lemma: u
   let created = false;
   if (!have) {
     const s = l?.sentences?.find((x) => x.de.includes(g.form));
-    await insertWords(db, [
-      {
-        lemma: g.lemma, pos, gender: pos === 'noun' && ['der', 'die', 'das'].includes(String(g.gender)) ? g.gender : null,
-        level: ['B1', 'B2', 'C1'].includes(g.level) ? g.level : 'B2', level_src: 'mine',
-        gloss_ko: g.gloss_ko, gloss_status: 'generated',
-        example_de: s?.de ?? null, example_ko: s?.ko ?? null, example_src: s ? `article:${articleId}` : null,
-        pinned: 1,
-      },
-    ]);
+    try {
+      await insertWords(db, [
+        {
+          lemma: g.lemma, pos, gender: pos === 'noun' && ['der', 'die', 'das'].includes(String(g.gender)) ? g.gender : null,
+          level: ['B1', 'B2', 'C1'].includes(g.level) ? g.level : 'B2', level_src: 'mine',
+          gloss_ko: g.gloss_ko, gloss_status: 'generated',
+          example_de: s?.de ?? null, example_ko: s?.ko ?? null, example_src: s ? `article:${articleId}` : null,
+          pinned: 1,
+        },
+      ]);
+    } catch (e) {
+      // 두 번 눌렀거나 매일 작업과 겹쳐 같은 번호를 잡았으면(기본키 충돌) 먼저 들어간 단어를 쓴다
+      if (!(await db.prepare('SELECT id FROM words WHERE lemma = ? AND pos = ?').bind(g.lemma, pos).first())) throw e;
+    }
     have = await db.prepare('SELECT id FROM words WHERE lemma = ? AND pos = ?').bind(g.lemma, pos).first<{ id: string }>();
     if (!have) throw new HttpError(500, 'insert_failed');
     created = true;

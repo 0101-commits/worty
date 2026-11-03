@@ -97,10 +97,10 @@ const postReviews: Handler = async ({ req, env }) => {
     if (Number.isNaN(Date.parse(r.reviewed_at))) throw bad('bad_reviewed_at');
   }
   if (body.reviews.length === 0) return json({ applied: 0, cards: [] } satisfies ReviewsResponse);
-  // 시각은 한 꼴(toISOString)로 — 학습일 셈이 ISO 글자 비교라 꼴이 다르면 어긋난다. 기기 시계가 앞서 있으면 지금으로
-  const nowMs = Date.now();
+  // 시각은 한 꼴(toISOString)로 — 학습일 셈이 ISO 글자 비교라 꼴이 다르면 어긋난다.
+  // 지금 시각으로 고치지는 않는다(다시 보낼 때 다른 값이 되면 같은 채점을 두 번 적는다 — 검토 반영)
   const reviews = (body.reviews as ReviewInput[])
-    .map((r) => ({ ...r, reviewed_at: new Date(Math.min(Date.parse(r.reviewed_at), nowMs + 60_000)).toISOString() }))
+    .map((r) => ({ ...r, reviewed_at: new Date(r.reviewed_at).toISOString() }))
     .sort((a, b) => a.reviewed_at.localeCompare(b.reviewed_at));
   const ids = [...new Set(reviews.map((r) => r.word_id))];
 
