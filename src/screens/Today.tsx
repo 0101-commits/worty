@@ -242,6 +242,7 @@ interface Entry {
   mode?: PracticeMode
 }
 const ENTRIES: Entry[] = [
+  { key: 'mix', desc: '카드에 맞는 문제를 섞어서(오늘 몫과 같은 방식) · 끝 화면 「+10개」와 같아요' },
   { key: 'cloze', desc: MODES.cloze.desc, mode: 'cloze' },
   { key: 'match', desc: MODES.match.desc, mode: 'match' },
   { key: 'meaning', desc: '독일어 → 뜻, 뜻 → 독일어', mode: 'meaning' },
@@ -281,7 +282,11 @@ function PracticeSheet({ open, studiedToday, onClose }: { open: boolean; studied
   }
   const start = () => {
     if (!entry) return
-    const path = swipe ? `/drill?scope=${scope}&n=${n}` : `/practice?mode=${entry.mode === 'meaning' ? dir : entry.mode}&scope=${scope}&n=${n}`
+    const path = swipe
+      ? `/drill?scope=${scope}&n=${n}`
+      : entry.key === 'mix'
+        ? `/session?more=1&scope=${scope}&n=${n}`
+        : `/practice?mode=${entry.mode === 'meaning' ? dir : entry.mode}&scope=${scope}&n=${n}`
     close()
     navigate(path)
   }

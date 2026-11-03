@@ -1,10 +1,11 @@
 // 오늘 몫 한 세션(기획 v11 5절): #/session — 진행 막대 하나, 카드 상태에 맞는 연습을 섞어 낸다(session.ts planStep).
 // 채점은 쌓았다가 판 끝(또는 앱을 내릴 때) 한 번에 보낸다(sendReviews — 못 보내면 기기에 적어 두고 다음에 열 때 다시).
-// 「+10개」(#/session?more=1)는 배운 단어 10개로 같은 세션을 돌리고 결과는 연습 기록(/api/practice)에 적는다 — 틀린 단어는 서버가 「다시」로.
+// 「섞어서」(#/session?more=1&scope=week&n=10 — 끝 화면 「+10개」 · 오늘 › 연습 맨 위)는 배운 단어로 같은 세션을 돌리고
+// 결과는 연습 기록(/api/practice)에 적는다 — 틀린 단어는 서버가 「다시」로. 끝 화면에 「틀린 단어만 다시」.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { BottomSheet, Button, IconButton, OxBar, ProgressBar, Skeleton, TextField } from '../k/index.tsx'
 import { IconClose, IconFlipBackward, IconMore } from '../k/icons.tsx'
-import type { DeckItem, PoolWord, PracticeMode, PracticeResultsRequest, Rating } from '../../shared/api.ts'
+import type { DeckItem, PoolWord, PracticeResultsRequest, PracticeScope, Rating } from '../../shared/api.ts'
 import { api, errorText, sendReviews } from '../api.ts'
 import { articleApi, type SavedExpr } from '../articles.ts'
 import { speak } from '../tts.ts'
@@ -14,7 +15,7 @@ import { linkTo, navigate, useRoute } from '../router.ts'
 import { EXPR_PER_DAY, MORE_N, autoGrade, limitFor, mergePool, orderToday, oxCount, planStep, practiceMode, type Kind, type Step } from '../session.ts'
 import { CardFace, SwipeDeck } from '../SwipeDeck.tsx'
 import { T } from '../text.ts'
-import { Emoji, ErrorBox, useToaster } from '../ui.tsx'
+import { Emoji, ErrorBox, Lemma, useToaster } from '../ui.tsx'
 import { ArtikelView, ChoiceView, MatchView, WriteView, type AnswerMeta } from './Quiz.tsx'
 import './session.css'
 
@@ -41,11 +42,19 @@ async function loadToday(first: string | null): Promise<Loaded> {
   return { mode: 'today', queue, pool: mergePool(p?.pool ?? [], queue), dayEnd: t.day_end, key: t.date + t.settings.review_only_day + (first ?? ''), exprs: e.items }
 }
 
-async function loadMore(): Promise<Loaded> {
+const MORE_SCOPES: PracticeScope[] = ['today', 'week', 'all', 'wrong']
+const MORE_SIZES = [10, 20, 30]
+
+/** 섞어서 연습 재료. 범위를 안 정했으면(끝 화면 「+10개」) 최근 7일 → 모자라면 전체. only = 「틀린 단어만 다시」 */
+async function loadMore(scope: PracticeScope | null, n: number, only: DeckItem[] | null): Promise<Loaded> {
   const usable = (items: DeckItem[]) => items.filter((it) => it.word.gloss_ko)
-  let r = await api.practice('week', MORE_N)
-  if (usable(r.items).length < 4) r = await api.practice('all', MORE_N)
-  const queue = usable(r.items).slice(0, MORE_N)
+  if (only) {
+    const p = await api.practice('all', 1).catch(() => null)
+    return { mode: 'more', queue: only, pool: mergePool(p?.pool ?? [], only), dayEnd: null, key: 'more' + Date.now(), exprs: [] }
+  }
+  let r = await api.practice(scope ?? 'week', n)
+  if (!scope && usable(r.items).length < 4) r = await api.practice('all', n)
+  const queue = usable(r.items).slice(0, n)
   return { mode: 'more', queue, pool: mergePool(r.pool, queue), dayEnd: null, key: 'more' + Date.now(), exprs: [] }
 }
 
@@ -53,9 +62,21 @@ export default function Session() {
   const q = useRoute().query
   const more = q.get('more') === '1'
   const first = q.get('first')
+  const scope = MORE_SCOPES.find((x) => x === q.get('scope')) ?? null
+  const n = MORE_SIZES.includes(Number(q.get('n'))) ? Number(q.get('n')) : MORE_N
   const [round, setRound] = useState(0)
-  const data = useAsync(() => (more ? loadMore() : loadToday(first)), [more, first, round])
-  if (data.data && !data.loading) return <Run key={data.data.key} d={data.data} onMore={() => (more ? setRound((n) => n + 1) : navigate('/session?more=1'))} />
+  const [only, setOnly] = useState<DeckItem[] | null>(null)
+  const data = useAsync(() => (more ? loadMore(scope, n, only) : loadToday(first)), [more, first, round, scope, n, only])
+  const again = () => {
+    setOnly(null)
+    if (more) setRound((k) => k + 1)
+    else navigate('/session?more=1')
+  }
+  const retryWrong = (items: DeckItem[]) => {
+    setOnly(items)
+    setRound((k) => k + 1)
+  }
+  if (data.data && !data.loading) return <Run key={data.data.key} d={data.data} onMore={again} onRetry={retryWrong} />
   return (
     <div className="ss">
       <SessionHead value={0} count="" />
@@ -103,7 +124,7 @@ interface Answered {
   grades: Array<{ word_id: string; rating: Rating; at: string }>
 }
 
-function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
+function Run({ d, onMore, onRetry }: { d: Loaded; onMore: () => void; onRetry: (items: DeckItem[]) => void }) {
   const toast = useToaster()
   const today = d.mode === 'today'
   // 오늘 몫: 「다시」만 판 뒤로 + 오늘 학습일 안에 다시 볼 카드는 판 뒤로(F2). +10개: 판 뒤로 안 보냄(한 번씩)
@@ -111,6 +132,10 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
   const [sid] = useState(() => Date.now().toString(36) + Math.random().toString(36).slice(2, 8))
   const [lastKind, setLastKind] = useState<Kind | null>(null)
   const [undoable, setUndoable] = useState(false)
+  // 지금 문제에 답했고 아직 「다음」을 안 눌렀음 → 되돌리면 같은 문제를 처음부터(retry 로 다시 그림)
+  const [ans, setAns] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const prevKind = useRef<Kind | null>(null)
   const [menu, setMenu] = useState(false)
   const closeMenu = useCallback(() => setMenu(false), [])
   const [skipped, setSkipped] = useState(0)
@@ -141,7 +166,7 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
       latest.current = { ...st, sentCount: st.pending.length }
       dispatch({ type: 'flush' })
       if (today) return sendReviews({ session_id: sid, reviews: list }, keepalive)
-      const byMode = new Map<PracticeMode, PracticeResultsRequest['results']>()
+      const byMode = new Map<PracticeResultsRequest['mode'], PracticeResultsRequest['results']>()
       for (const r of list) {
         const k = kinds.current.get(`${r.word_id}|${r.reviewed_at}`)
         const m = k ? practiceMode(k) : null
@@ -175,6 +200,7 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
   const record = (kind: Kind, word_id: string, rating: Rating) => {
     const at = new Date().toISOString()
     answered.current = { kind, grades: [...(answered.current?.grades ?? []), { word_id, rating, at }] }
+    setAns(true)
   }
   const onAnswer = (kind: Kind) => (correct: boolean, id: string, meta: AnswerMeta) => record(kind, id, autoGrade({ correct, ...meta }, limitFor(kind)))
   // 「다음」: 답한 결과를 줄에 반영(카드마다 채점 하나)
@@ -185,8 +211,16 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
     for (const g of a.grades) kinds.current.set(`${g.word_id}|${g.at}`, a.kind)
     if (a.grades.length === 1) dispatch({ type: 'grade', rating: a.grades[0].rating, at: a.grades[0].at })
     else dispatch({ type: 'gradeMany', grades: a.grades }) // 짝은 맞춘 차례로 적힌다 — 리듀서가 줄 차례로 놓는다
+    prevKind.current = lastKind
     setLastKind(a.kind)
-    setUndoable(false)
+    setAns(false)
+    setUndoable(true) // 보내기 전까지 1단계
+  }
+  // 잘못 누른 답: 「다음」 전이면 같은 문제를 처음부터
+  const undoAnswer = () => {
+    answered.current = null
+    setAns(false)
+    setRetry((k) => k + 1)
   }
   // 카드 뒤집기: X · O 를 누르거나 밀면 바로 채점
   const gradeFlip = (rating: Rating) => {
@@ -194,22 +228,27 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
     kinds.current.set(`${s.queue[s.index]?.word.id}|${at}`, 'flip')
     answered.current = null
     dispatch({ type: 'grade', rating, at })
+    prevKind.current = lastKind
     setLastKind('flip')
-    setUndoable(today) // 보내기 전까지 1단계(+10개는 연습 기록이라 안 함)
+    setUndoable(true) // 보내기 전까지 1단계(채점은 판 끝에 보낸다)
   }
   const undo = () => {
     answered.current = null
     dispatch({ type: 'undo' })
     setUndoable(false)
+    setAns(false)
+    setLastKind(prevKind.current)
   }
   // 소개 카드 「다음」: 채점 없이 몇 장 뒤로 — 그때 퀴즈로(방금 본 뜻을 바로 묻지 않게)
   const introduce = () => {
     answered.current = null
+    setAns(false)
     dispatch({ type: 'introduce' })
     setUndoable(false)
   }
   const skip = () => {
     answered.current = null
+    setAns(false)
     setMenu(false)
     dispatch({ type: 'skip' })
     setSkipped((n) => n + 1)
@@ -234,6 +273,9 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
 
   if (s.finished) {
     const c = oxCount(s.pending)
+    // 섞어서 연습에서 틀린 카드(한 장씩만 나온다)
+    const wrongIds = new Set(s.pending.filter((p) => p.rating === 1).map((p) => p.word_id))
+    const wrong = [...new Map(s.queue.filter((it) => wrongIds.has(it.word.id)).map((it) => [it.word.id, it] as const)).values()]
     const ox = { o: c.o + eox.o, x: c.x + eox.x }
     return (
       <div className="ss">
@@ -253,7 +295,25 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
               </p>
             )}
             {skipped > 0 && today && <p className="small muted center">{T.sessionLeft(skipped)}</p>}
-            <Button fullWidth size="large" onClick={onMore}>
+            {!today && wrong.length > 0 && (
+              <div className="pgloss">
+                <p className="small muted">
+                  틀린 단어 {wrong.length} · {T.practiceNote}
+                </p>
+                {wrong.map((it) => (
+                  <a key={it.word.id} className="kv" {...linkTo('/word/' + it.word.id)}>
+                    <Lemma word={it.word} />
+                    <span className="small muted">{it.word.gloss_ko}</span>
+                  </a>
+                ))}
+              </div>
+            )}
+            {!today && wrong.length > 0 && (
+              <Button fullWidth size="large" onClick={() => onRetry(wrong)}>
+                틀린 단어만 다시
+              </Button>
+            )}
+            <Button fullWidth size="large" variant={!today && wrong.length > 0 ? 'outlined' : 'solid'} color={!today && wrong.length > 0 ? 'assistive' : 'primary'} onClick={onMore}>
               {T.more10}
             </Button>
             <div className="ss-end-links">
@@ -272,14 +332,14 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
 
   if (!step) return null
   const item = step.items[0]
-  const stepKey = `${s.index}|${s.pending.length}|${skipped}`
+  const stepKey = `${s.index}|${s.pending.length}|${skipped}|${retry}`
   const single = step.items.length === 1
   return (
     <div className="ss">
       <SessionHead
         value={s.index / Math.max(1, total)}
         count={`${s.index + 1} / ${total}`}
-        onUndo={undoable && s.history ? undo : undefined}
+        onUndo={ans ? undoAnswer : undoable && s.history ? undo : undefined}
         onMenu={single ? () => setMenu(true) : undefined}
       />
       <main className={'page ss-page' + (step.kind === 'flip' ? ' ss-flip' : '')} data-step={step.kind}>

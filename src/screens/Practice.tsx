@@ -2,7 +2,8 @@
 // 한 문제씩 → O · / X 정답 …(고른 보기의 뜻도) → 다음. 끝나면 결과를 practice 표에 보내고,
 // 틀린 배운 단어는 서버가 「다시」 채점해 오늘 몫 복습에 다시 넣는다. 틀린 단어만 다시 할 수도 있다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ProgressBar, Skeleton } from '../k/index.tsx'
+import { Button, IconButton, ProgressBar, Skeleton } from '../k/index.tsx'
+import { IconFlipBackward } from '../k/icons.tsx'
 import type { DeckItem, PoolWord, PracticeMode, PracticeScope } from '../../shared/api.ts'
 import { api, errorText } from '../api.ts'
 import { MODES, makeQuestions, wordsIn } from '../practice.ts'
@@ -61,6 +62,9 @@ function Round(props: { mode: PracticeMode; items: DeckItem[]; pool: PoolWord[];
   const questions = useMemo(() => makeQuestions(mode, items, pool, n), [mode, items, pool, n, pass])
   const total = useMemo(() => questions.reduce((s, qq) => s + wordsIn(qq), 0), [questions])
   const [i, setI] = useState(0)
+  // 되돌리기: starts[k] = 문제 k 를 시작할 때까지 쌓인 결과 수. retry 로 같은 문제를 다시 그린다
+  const starts = useRef<number[]>([0])
+  const [retry, setRetry] = useState(0)
   const [results, setResults] = useState<Result[]>([])
   // 서버가 「아직 잘 모르는 단어」로 바꾼 단어(판 끝 전송의 답). null = 아직 모름 · 전송 실패
   const [relearn, setRelearn] = useState<string[] | null>(null)
@@ -140,7 +144,7 @@ function Round(props: { mode: PracticeMode; items: DeckItem[]; pool: PoolWord[];
             <p className="small muted">
               틀린 단어 {wrong.length}
               {/* 0 이면 말 안 함 — 이미 오늘 몫인 단어이거나, 앱을 내리며 보낸 묶음의 답은 못 받는다(검토 반영) */}
-              {moved > 0 ? ` · ${moved}개를 오늘 복습에 넣었어요` : ''}
+              {moved > 0 ? ` · ${moved}개는 내일·모레 복습에 다시 나와요` : ''}
             </p>
             {wrong.map((it) => (
               <a key={it.word.id} className="kv" {...linkTo('/word/' + it.word.id)}>
@@ -152,18 +156,12 @@ function Round(props: { mode: PracticeMode; items: DeckItem[]; pool: PoolWord[];
         ) : (
           <p className="small muted center">하나도 안 틀렸어요</p>
         )}
-        {moved > 0 && (
-          <Button fullWidth size="large" onClick={() => navigate('/session')}>
-            오늘 복습에서 다시 보기
-          </Button>
-        )}
         {wrong.length > 0 && (
           <Button
             fullWidth
             size="large"
-            variant={moved > 0 ? 'outlined' : 'solid'}
-            color={moved > 0 ? 'assistive' : 'primary'}
             onClick={() => {
+              starts.current = [0]
               setItems(wrong)
               setPass((p) => p + 1)
               setI(0)
@@ -187,6 +185,21 @@ function Round(props: { mode: PracticeMode; items: DeckItem[]; pool: PoolWord[];
   }
 
   const qq = questions[i]
+  // 지금 문제에 답했으면 그 답을, 아니면 바로 앞 문제를 되돌린다(이미 서버로 보낸 결과는 못 되돌림)
+  const start = starts.current[i] ?? 0
+  const answeredHere = results.length > start
+  const undoFrom = answeredHere ? start : i > 0 ? (starts.current[i - 1] ?? 0) : -1
+  const canUndo = undoFrom >= 0 && undoFrom >= sent.current
+  const undo = () => {
+    if (!canUndo) return
+    setResults((rs) => rs.slice(0, undoFrom))
+    if (!answeredHere) setI(i - 1)
+    setRetry((k) => k + 1)
+  }
+  const next = () => {
+    starts.current[i + 1] = results.length
+    setI(i + 1)
+  }
   const before = questions.slice(0, i).reduce((s, x) => s + wordsIn(x), 0)
   return (
     <>
@@ -195,13 +208,18 @@ function Round(props: { mode: PracticeMode; items: DeckItem[]; pool: PoolWord[];
         <span className="ss-count num" data-testid="progress" aria-live="polite">
           {mode === 'match' ? `${before + wordsIn(qq)} / ${total}` : `${i + 1} / ${questions.length}`}
         </span>
+        {canUndo && (
+          <IconButton aria-label={T.undo} onClick={undo}>
+            <IconFlipBackward />
+          </IconButton>
+        )}
       </div>
       {qq.mode === 'match' ? (
-        <MatchView key={`${pass}:${i}`} q={qq} onAnswer={answer} onNext={() => setI((k) => k + 1)} />
+        <MatchView key={`${pass}:${i}:${retry}`} q={qq} onAnswer={answer} onNext={next} />
       ) : qq.mode === 'write' ? (
-        <WriteView key={`${pass}:${i}`} q={qq} onAnswer={answer} onNext={() => setI((k) => k + 1)} />
+        <WriteView key={`${pass}:${i}:${retry}`} q={qq} onAnswer={answer} onNext={next} />
       ) : (
-        <ChoiceView key={`${pass}:${i}`} q={qq} onAnswer={answer} onNext={() => setI((k) => k + 1)} />
+        <ChoiceView key={`${pass}:${i}:${retry}`} q={qq} onAnswer={answer} onNext={next} />
       )}
     </>
   )

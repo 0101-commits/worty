@@ -148,7 +148,8 @@ export interface PracticeResponse {
 }
 /** POST /api/practice */
 export interface PracticeResultsRequest {
-  mode: PracticeMode;
+  /** flip = 넘겨 보기(카드 뒤집기 X · O). 문제를 만들지 않는 기록 전용 방식 */
+  mode: PracticeMode | 'flip';
   results: Array<{ word_id: string; correct: boolean; at: string }>;
 }
 export interface PracticeSaveResponse {

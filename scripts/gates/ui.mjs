@@ -385,7 +385,7 @@ try {
         const result = await page.getByTestId('practice-result').count()
         const psw2 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
         await page.screenshot({ path: join(SHOTS, 'practice-result-390.png'), fullPage: true })
-        const qok = pSheet === 1 && modes.join(',') === '빈칸,짝,뜻,쓰기,관사,넘겨 보기' && atPractice && answered > 0 && result === 1 && psw2 <= 0 && wrongSeen > 0 && wrongShown === wrongSeen && errors.length === 0
+        const qok = pSheet === 1 && modes.join(',') === '섞어서,빈칸,짝,뜻,쓰기,관사,넘겨 보기' && atPractice && answered > 0 && result === 1 && psw2 <= 0 && wrongSeen > 0 && wrongShown === wrongSeen && errors.length === 0
         if (!qok)
           fail(`연습 빈칸: 시트 ${pSheet} · 목록 ${modes.join(',')} · 이동 ${atPractice} · 정답 표시 ${answered} · 결과 ${result} · 넘침 ${psw2} · 오답 뜻 ${wrongShown}/${wrongSeen}${errors.length ? ' · 콘솔 오류 ' + errors.join(' | ') : ''}`)
         table.push({ route: '연습 › 빈칸', vp: '390', light: qok ? 'ok' : 'FAIL', dark: '-', sw: `정답 표시 ${answered}문제 · 결과 ${result} · 오답 뜻 ${wrongShown}/${wrongSeen}` })
