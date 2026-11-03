@@ -1,16 +1,17 @@
-// 넘겨 보기(오늘 › 연습 · 단어 목록 「10개 연습」): 배운 카드를 넘기며 뜻 확인.
-// 한 판 안에서만 돈다 — X 는 줄 뒤로, O 는 빼기. 서버에 채점을 보내지 않아 일정(FSRS)은 그대로(D5, G17).
+// 넘겨 보기(오늘 › 연습 · 단어 목록 「10개 연습」 · 기록 「모아서 연습」): 배운 카드를 넘기며 뜻 확인.
+// 한 판 안에서 X 는 줄 뒤로, O 는 빼기. 판이 끝나면(또는 나가면) 결과를 연습 기록(mode flip)으로 보낸다 —
+// 틀린 배운 카드는 서버가 「다시」로 내일·모레 복습에 넣는다(2026-11-03, 예전엔 기록 안 함).
 import { parseWordsParams } from '../wordsFilter.ts'
-import { useReducer, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { Button, Skeleton } from '../k/index.tsx'
 import type { DeckItem, DrillScope, WordsQuery } from '../../shared/api.ts'
-import { api } from '../api.ts'
+import { api, errorText } from '../api.ts'
 import { deckReducer, initDeck, shuffle } from '../deck.ts'
 import { useAsync } from '../hooks.ts'
 import { navigate, useRoute } from '../router.ts'
 import { SwipeDeck } from '../SwipeDeck.tsx'
 import { MODE_NAME, T } from '../text.ts'
-import { Emoji, ErrorBox, Top } from '../ui.tsx'
+import { Emoji, ErrorBox, Top, useToaster } from '../ui.tsx'
 import './session.css'
 
 export const SCOPE_LABEL: Record<DrillScope, string> = { today: T.scopeToday, week: T.scopeWeek, all: T.scopeAll }
@@ -62,6 +63,33 @@ export default function Drill() {
 function Run({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
   // X(다시 1)는 줄 뒤로(최대 2번), O(좋음 3)는 빼기
   const [s, dispatch] = useReducer(deckReducer, items, (it) => initDeck(shuffle(it), 2))
+  const toast = useToaster()
+  // 서버가 「다시」로 바꾼 카드 수(판 끝 전송의 답). null = 아직 모름
+  const [moved, setMoved] = useState<number | null>(null)
+  const latest = useRef(s)
+  useEffect(() => {
+    latest.current = s
+  }, [s])
+  const sent = useRef(false)
+  const save = useCallback(
+    (keepalive: boolean) => {
+      const p = latest.current.pending
+      if (sent.current || !p.length) return
+      sent.current = true
+      api
+        .savePractice({ mode: 'flip', results: p.map((r) => ({ word_id: r.word_id, correct: r.rating >= 2, at: r.reviewed_at })) }, keepalive)
+        .then(
+          (r) => !keepalive && setMoved(r.relearn?.length ?? 0),
+          (e) => !keepalive && toast(T.saveFail(errorText(e)), 'cautionary'),
+        )
+    },
+    [toast],
+  )
+  useEffect(() => {
+    if (s.finished) save(false)
+  }, [s.finished, save])
+  // 판 중간에 나가면 그때까지 넘긴 것만
+  useEffect(() => () => save(true), [save])
   if (s.finished) {
     const cards = new Set(s.pending.map((p) => p.word_id)).size
     const again = s.pending.filter((p) => p.rating === 1).length
@@ -77,7 +105,7 @@ function Run({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
             {T.x} <b className="num">{again}</b>
           </span>
         </p>
-        <p className="small muted center">일정은 바뀌지 않았어요. 복습 날짜는 오늘 몫 그대로예요.</p>
+        <p className="small muted center">{moved ? `X 한 배운 단어 ${moved}개는 내일·모레 복습에 다시 나와요.` : again ? T.practiceNote : '다 알았어요. 복습 날짜는 그대로예요.'}</p>
         <Button fullWidth size="large" onClick={onAgain}>
           한 판 더
         </Button>

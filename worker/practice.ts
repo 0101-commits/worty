@@ -8,7 +8,8 @@ import { addDays, studyDay, studyDayStartUtc } from './time.ts';
 
 export const PRACTICE_MODES: readonly PracticeMode[] = ['cloze', 'match', 'meaning', 'meaning_rev', 'write'];
 /** 예전 방식(예문 속 단어 짚기 → 짝 맞추기로 바뀜). 옛 화면이 기기에 남아 보내는 결과도 받는다 */
-const LEGACY_MODES: readonly string[] = ['pick'];
+// pick = 옛 「짚기」 · flip = 넘겨 보기(기록만 — 문제를 만들지 않는다)
+const LEGACY_MODES: readonly string[] = ['pick', 'flip'];
 /** 「틀린 단어」 범위: 최근 30일 연습에서 그 단어의 마지막 결과가 틀림 */
 const WRONG_DAYS = 30;
 /** 보기(오답) 재료: 배운 단어 무작위 · 아직 안 배운 같은 레벨 단어(배운 단어가 적은 품사도 4지선다가 되게) */

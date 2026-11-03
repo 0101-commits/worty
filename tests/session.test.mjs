@@ -127,7 +127,7 @@ test('planStep(+10개 연습): 뒤집기 · 관사 · 소개 없이 퀴즈만 ·
   assert.equal(planStep([item(2)], 0, ctx({ practice: true, pool: [] })).kind, 'write', '보기가 모자라면 쓰기')
   assert.equal(practiceMode('cloze'), 'cloze')
   assert.equal(practiceMode('match'), 'match')
-  assert.equal(practiceMode('flip'), null)
+  assert.equal(practiceMode('flip'), 'flip', '뒤집기도 연습 기록(넘겨 보기와 같은 flip, 2026-11-03)')
   assert.equal(practiceMode('artikel'), null)
 })
 

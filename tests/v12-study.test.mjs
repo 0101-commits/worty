@@ -91,6 +91,9 @@ async function run(db) {
   out.practice1 = (await call(db, 'POST', '/api/practice', pr)).body.count;
   out.practice2 = (await call(db, 'POST', '/api/practice', pr)).body.count;
   out.practiceRows = Number((await db.prepare('SELECT count(*) AS n FROM practice').first()).n);
+  // 넘겨 보기 결과(mode flip)도 받는다 · 모르는 방식은 400
+  out.flip = (await call(db, 'POST', '/api/practice', { mode: 'flip', results: [{ word_id: 'w0002', correct: true, at: '2026-11-03T03:00:00.000Z' }] })).body.count;
+  out.badMode = (await call(db, 'POST', '/api/practice', { mode: 'zzz', results: [{ word_id: 'w0002', correct: true, at: '2026-11-03T03:00:01.000Z' }] })).status;
   // 없는 단어의 채점은 건너뛰고 나머지는 적는다(묶음 전체 404 금지)
   const rv = await call(db, 'POST', '/api/reviews', { session_id: 's1', reviews: [{ word_id: 'w9999', rating: 3, reviewed_at: '2026-11-03T02:00:00.000Z' }, { word_id: 'w0002', rating: 3, reviewed_at: '2026-11-03T02:00:01.000Z' }] });
   out.reviews = { status: rv.status, applied: rv.body.applied };
@@ -123,6 +126,8 @@ test('오늘 공부에 넣기 · 기사 낱말 바로 넣기 · 활용형 찾기
   assert.equal(a.practice1, 1);
   assert.equal(a.practice2, 0);
   assert.equal(a.practiceRows, 1);
+  assert.equal(a.flip, 1);
+  assert.equal(a.badMode, 400);
   assert.deepEqual(a.reviews, { status: 200, applied: 1 });
 });
 

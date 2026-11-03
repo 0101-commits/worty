@@ -37,8 +37,8 @@ export const T = {
   scopeWeek: '최근 7일',
   scopeAll: '배운 전체',
   scopeWrong: '틀린 단어',
-  practiceNote: '틀린 단어는 오늘 복습에 다시 나와요.',
-  swipeNote: '모르면 줄 뒤로 가요. 복습 일정은 그대로예요.',
+  practiceNote: '틀린 배운 단어는 내일·모레 복습에 다시 나와요.',
+  swipeNote: '모르면 X — 줄 뒤로 가고 복습에도 다시 나와요.',
   close: '닫기',
 
   // 세션
@@ -101,6 +101,7 @@ export const T = {
 
 /** 연습 이름(6절: 빈칸 · 짝 · 뜻 · 쓰기 · 관사 · 넘겨 보기) */
 export const MODE_NAME = {
+  mix: '섞어서',
   cloze: '빈칸',
   match: '짝',
   meaning: '뜻',

@@ -174,9 +174,9 @@ export function oxCount(ratings: Array<{ rating: Rating }>) {
   return { o: ratings.length - x, x }
 }
 
-/** 「+10개」 연습 결과를 적을 방식(연습 기록 표 practice.mode). 뒤집기 · 관사는 안 적는다 */
-export function practiceMode(kind: Kind): PracticeMode | null {
-  return kind === 'cloze' || kind === 'meaning' || kind === 'write' || kind === 'match' ? kind : null
+/** 「+10개」 연습 결과를 적을 방식(연습 기록 표 practice.mode). 관사는 안 적는다 */
+export function practiceMode(kind: Kind): PracticeMode | 'flip' | null {
+  return kind === 'cloze' || kind === 'meaning' || kind === 'write' || kind === 'match' || kind === 'flip' ? kind : null
 }
 
 /** 카드 표지(싸다보카처럼 상태를 말로): 새 단어 · 다시 · 오늘 또 · 6일 만 · 2개월 만. tone = 색 */
