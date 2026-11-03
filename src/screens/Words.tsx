@@ -42,6 +42,7 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
   const [f, setF] = useState<WordsFilter>(remembered)
   const [sheet, setSheet] = useState<SheetKey | null>(null)
   const [addOpen, setAddOpen] = useState(open || Boolean(add || url))
+  const [addText, setAddText] = useState(add)
   const dq = useDebounced(f.q.trim(), 300)
   const q = { ...f, q: dq }
   const key = JSON.stringify(toQuery(q))
@@ -163,6 +164,17 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
             <Emoji name="study" size={120} />
             <h2>{filtered ? '찾는 단어가 없어요' : '단어가 아직 없어요'}</h2>
             <p>{filtered ? '철자를 바꾸거나 거르기를 풀어 보세요. 독일어와 뜻 모두 찾아요.' : '단어를 넣으면 여기에 보여요.'}</p>
+            {filtered && dq && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setAddText(dq)
+                  setAddOpen(true)
+                }}
+              >
+                「{dq}」 단어장에 넣기
+              </Button>
+            )}
             {filtered && (
               <Button variant="outlined" color="assistive" size="small" onClick={() => set({ ...EMPTY_FILTER, sort: f.sort })}>
                 거르기 풀기
@@ -227,7 +239,7 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
           </ul>
         )}
       </BottomSheet>
-      <AddWord key={add + '|' + url} open={addOpen} onClose={() => setAddOpen(false)} initialWord={add} initialUrl={url} />
+      <AddWord key={addText + '|' + url} open={addOpen} onClose={() => setAddOpen(false)} initialWord={addText} initialUrl={url} />
     </>
   )
 }

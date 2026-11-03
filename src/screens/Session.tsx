@@ -123,7 +123,7 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
   const kinds = useRef(new Map<string, Kind>())
 
   const step = useMemo(
-    () => planStep(s.queue, s.index, { pool: d.pool, seen: s.reshows, lastKind, practice: !today }),
+    () => planStep(s.queue, s.index, { pool: d.pool, seen: s.reshows, introduced: s.introduced, lastKind, practice: !today }),
     // 줄 · 자리가 바뀔 때만 새로 정한다(보기 섞기가 다시 그릴 때마다 바뀌지 않게). lastKind 는 채점과 같은 때 바뀐다
     [s.queue, s.index],
   )
@@ -200,6 +200,12 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
   const undo = () => {
     answered.current = null
     dispatch({ type: 'undo' })
+    setUndoable(false)
+  }
+  // 소개 카드 「다음」: 채점 없이 몇 장 뒤로 — 그때 퀴즈로(방금 본 뜻을 바로 묻지 않게)
+  const introduce = () => {
+    answered.current = null
+    dispatch({ type: 'introduce' })
     setUndoable(false)
   }
   const skip = () => {
@@ -280,7 +286,7 @@ function Run({ d, onMore }: { d: Loaded; onMore: () => void }) {
         {step.kind === 'flip' ? (
           <SwipeDeck key={stepKey} cards={[{ key: stepKey, item }]} onGrade={gradeFlip} onUndo={undoable ? undo : undefined} />
         ) : (
-          <StepView key={stepKey} step={step} onAnswer={onAnswer(step.kind)} onNext={advance} />
+          <StepView key={stepKey} step={step} onAnswer={onAnswer(step.kind)} onNext={advance} onIntro={introduce} />
         )}
       </main>
       <MoreMenu open={menu} item={item} onClose={closeMenu} onSkip={skip} />
@@ -321,10 +327,9 @@ function ExprStep({ x, onGrade }: { x: SavedExpr; onGrade: (rating: 1 | 3) => vo
   )
 }
 
-/** 소개 카드(새 단어 · 잊은 단어) → 퀴즈. 소개 카드는 채점하지 않는다 */
-function StepView({ step, onAnswer, onNext }: { step: Step; onAnswer: (correct: boolean, id: string, meta: AnswerMeta) => void; onNext: () => void }) {
-  const [intro, setIntro] = useState(step.intro)
-  if (intro) return <Intro item={step.items[0]} onDone={() => setIntro(false)} />
+/** 소개 카드(새 단어 · 잊은 단어)는 채점하지 않고 몇 장 뒤로 보낸다(onIntro) — 그 카드가 다시 오면 퀴즈 */
+function StepView({ step, onAnswer, onNext, onIntro }: { step: Step; onAnswer: (correct: boolean, id: string, meta: AnswerMeta) => void; onNext: () => void; onIntro: () => void }) {
+  if (step.intro) return <Intro item={step.items[0]} onDone={onIntro} />
   const q = step.q
   if (step.kind === 'artikel') return <ArtikelView item={step.items[0]} onAnswer={onAnswer} onNext={onNext} />
   if (q?.mode === 'match') return <MatchView q={q} onAnswer={onAnswer} onNext={onNext} />

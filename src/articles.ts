@@ -1,5 +1,6 @@
 // 오늘의 기사 · 저장한 표현(v11 4단계): 서버 길 + 목업 자료 + 폰 독일어 음성(D6 결정: 폰 내장 음성)
 import { MOCK, request } from './api.ts'
+import type { AddFromArticleResponse } from '../shared/api.ts'
 
 export type Gloss = { form: string; lemma: string; pos: string; gender: 'der' | 'die' | 'das' | null; gloss_ko: string; level: string }
 export type Expr = { base: string; meaning_ko: string; s: number }
@@ -33,6 +34,9 @@ export const articleApi = {
   delExpr: (id: number) => (MOCK ? mock({ ok: true }) : request<{ ok: boolean }>('DELETE', `/api/expressions/${id}`)),
   wordArticles: (wordId: string) =>
     MOCK ? mock({ items: [] as WordInArticle[] }) : request<{ items: WordInArticle[] }>('GET', `/api/word/${encodeURIComponent(wordId)}/articles`),
+  /** 공부 자료 낱말을 단어장에 바로 넣고 오늘 공부로(이미 있으면 그 카드를 오늘로) */
+  addWord: (id: number, lemma: string) =>
+    MOCK ? mock({ ok: true as const, mode: 'new' as const, id: 'w900', created: true }) : request<AddFromArticleResponse>('POST', `/api/articles/${id}/add-word`, { lemma }),
   gradeExpr: (id: number, rating: 1 | 3) => (MOCK ? mock({ ok: true }) : request<unknown>('POST', `/api/expressions/${id}/grade`, { rating })),
 }
 

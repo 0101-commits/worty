@@ -23,7 +23,7 @@ const FEED_URLS = [
   ['tagesschau', 'https://www.tagesschau.de/api2u/news'],
   ['ndr', 'https://www.ndr.de/fernsehen/barrierefreie_angebote/leichte_sprache/nachrichtenleichtesprache100~rss2.xml'],
 ];
-const CHUNK = 400; // D1 batch 실측 상한
+const CHUNK = 60; // 한 요청 UPDATE 수 — Postgres(Hyperdrive) 는 줄마다 왕복이라 400 이면 Worker 무료 CPU 를 넘어 500(11-01·11-03)
 
 const day = kstDay();
 const log = { day, dry: DRY, index: null, requests: null, news: {}, candidates: 0, added: 0, skipped: 0, backlog: null, ranks: 0, reseq: null, errors: [] };

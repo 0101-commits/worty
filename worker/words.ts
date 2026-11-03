@@ -6,7 +6,7 @@ import { REQ_TEXT } from '../shared/request.ts';
 import { levelsFor, loadSettings } from './deck.ts';
 import { HttpError, bad } from './http.ts';
 import { addDays, kstDay } from './time.ts';
-import { concatDistinct } from './db.ts';
+import { concatDistinct, crossJoin, jsonEach } from './db.ts';
 
 const DAY = 86_400_000;
 const LEVELS = new Set(['B1', 'B2', 'C1']);
@@ -194,51 +194,66 @@ export async function reviewQueue(db: D1Database, limit: number, now = new Date(
   const soon = new Date(now.getTime() + 3 * DAY).toISOString();
   const week = new Date(now.getTime() - 7 * DAY).toISOString();
   const notFresh = '(w.checked_at IS NULL OR w.checked_at < ?)';
+  // 1단계: 무리마다 id 만(긴 칸·되돌린 칸 부질의는 고른 줄에만 — 6무리 × limit 줄을 통째로 읽으면 Worker 무료 CPU 를 넘어 500, 11-01·11-03 실측)
+  const ID = 'w.id AS id';
   const parts = await db.batch([
-    db.prepare(`SELECT ${REVIEW_COLS}, r.kind AS report_kind, r.note AS report_note
+    db.prepare(`SELECT ${ID}, r.kind AS report_kind, r.note AS report_note
       FROM word_reports r JOIN words w ON w.id = r.word_id WHERE r.closed_at IS NULL ORDER BY r.created_at LIMIT ?`).bind(limit),
     // 약한 단어(L6): 많이 잊은 순. 예문이 단어를 못 붙들었을 수 있어 신고 다음으로 먼저 본다
-    db.prepare(`SELECT ${REVIEW_COLS} FROM words w JOIN cards c ON c.word_id = w.id
+    db.prepare(`SELECT ${ID} FROM words w JOIN cards c ON c.word_id = w.id
       WHERE c.lapses >= ? AND (w.checked_at IS NULL OR w.checked_at < ?) ORDER BY c.lapses DESC, w.seq LIMIT ?`).bind(WEAK_LAPSES, week, limit),
-    db.prepare(`SELECT ${REVIEW_COLS} FROM (
-        SELECT w.* FROM words w JOIN cards c ON c.word_id = w.id
+    db.prepare(`SELECT ${ID} FROM (
+        SELECT w.id, w.checked_at FROM words w JOIN cards c ON c.word_id = w.id
         WHERE c.state = 0 AND c.suspended = 0 AND ${inLevel} ORDER BY w.pinned DESC, w.seq, w.lemma LIMIT ?
       ) w WHERE ${notFresh}`).bind(...lv, 14 * s.new_per_day, stale),
-    db.prepare(`SELECT ${REVIEW_COLS} FROM words w JOIN cards c ON c.word_id = w.id
+    db.prepare(`SELECT ${ID} FROM words w JOIN cards c ON c.word_id = w.id
       WHERE c.state IN (1, 2, 3) AND c.suspended = 0 AND c.due < ? AND ${notFresh} ORDER BY c.due LIMIT ?`).bind(soon, stale, limit),
-    db.prepare(`SELECT ${REVIEW_COLS} FROM words w WHERE w.checked_at IS NULL ORDER BY w.seq, w.lemma LIMIT ?`).bind(limit),
-    db.prepare(`SELECT ${REVIEW_COLS} FROM words w WHERE w.checked_at < ? ORDER BY w.checked_at LIMIT ?`).bind(stale, limit),
+    db.prepare(`SELECT ${ID} FROM words w WHERE w.checked_at IS NULL ORDER BY w.seq, w.lemma LIMIT ?`).bind(limit),
+    db.prepare(`SELECT ${ID} FROM words w WHERE w.checked_at < ? ORDER BY w.checked_at LIMIT ?`).bind(stale, limit),
   ]);
-  const out: ReviewQueueItem[] = [];
+  const picked: Array<{ id: string; kind: unknown; note: unknown }> = [];
   const seen = new Set<string>();
   const weakCap = Math.ceil(limit / 2); // 약한 단어가 큐를 다 채우지 않게(L6)
   let weak = 0;
-  for (const [i, part] of parts.entries()) {
+  pick: for (const [i, part] of parts.entries()) {
     for (const r of part.results as Array<Record<string, unknown>>) {
-      if (out.length >= limit) return out;
+      if (picked.length >= limit) break pick;
       if (i === 1 && weak >= weakCap) break;
       const id = String(r.id);
       if (seen.has(id)) continue;
       seen.add(id);
       if (i === 1) weak++;
-      const t = (k: string) => (r[k] == null ? null : String(r[k]));
-      out.push({
-        id,
-        lemma: String(r.lemma),
-        pos: r.pos as ReviewQueueItem['pos'],
-        gender: t('gender'),
-        plural: t('plural'),
-        level: r.level as ReviewQueueItem['level'],
-        level_src: String(r.level_src),
-        gloss_ko: t('gloss_ko'),
-        gloss_status: String(r.gloss_status),
-        example_de: t('example_de'),
-        example_ko: t('example_ko'),
-        checked_at: t('checked_at'),
-        reverted: r.reverted ? String(r.reverted).split(',') : [],
-        report: r.report_kind ? { kind: String(r.report_kind), note: t('report_note') } : null,
-      });
+      picked.push({ id, kind: r.report_kind, note: r.report_note });
     }
+  }
+  if (!picked.length) return [];
+  // 2단계: 고른 줄만 긴 칸까지(한 질의)
+  const full = await db
+    .prepare(`SELECT ${REVIEW_COLS} FROM ${jsonEach(db, 'j')} ${crossJoin(db)} words w ON w.id = j.value`)
+    .bind(JSON.stringify(picked.map((p) => p.id)))
+    .all();
+  const byId = new Map((full.results as Array<Record<string, unknown>>).map((r) => [String(r.id), r]));
+  const out: ReviewQueueItem[] = [];
+  for (const p of picked) {
+    const r = byId.get(p.id);
+    if (!r) continue;
+    const t = (k: string) => (r[k] == null ? null : String(r[k]));
+    out.push({
+      id: p.id,
+      lemma: String(r.lemma),
+      pos: r.pos as ReviewQueueItem['pos'],
+      gender: t('gender'),
+      plural: t('plural'),
+      level: r.level as ReviewQueueItem['level'],
+      level_src: String(r.level_src),
+      gloss_ko: t('gloss_ko'),
+      gloss_status: String(r.gloss_status),
+      example_de: t('example_de'),
+      example_ko: t('example_ko'),
+      checked_at: t('checked_at'),
+      reverted: r.reverted ? String(r.reverted).split(',') : [],
+      report: p.kind ? { kind: String(p.kind), note: p.note == null ? null : String(p.note) } : null,
+    });
   }
   return out;
 }
@@ -257,8 +272,10 @@ export async function exampleWords(db: D1Database) {
 export async function reseq(db: D1Database, now = new Date()) {
   const since = addDays(kstDay(now), -29); // 오늘 포함 30일
   const [h, m] = await db.batch([
+    // 뉴스 수를 열쇠별로 먼저 한 번 모은 뒤 붙인다(단어마다 news_days 를 다시 훑던 상관 부질의는 Postgres 에서 시간 초과, 11-01·11-03)
     db.prepare(`UPDATE words SET news_hits30 = x.h FROM (
-        SELECT w.id, coalesce((SELECT sum(d.n) FROM news_days d WHERE d.key = ${KEY_SQL} AND d.day >= ?), 0) AS h FROM words w
+        SELECT w.id, coalesce(a.h, 0) AS h FROM words w
+        LEFT JOIN (SELECT d.key, sum(d.n) AS h FROM news_days d WHERE d.day >= ? GROUP BY d.key) a ON a.key = ${KEY_SQL}
       ) x WHERE words.id = x.id AND words.news_hits30 != x.h`).bind(since),
     db.prepare(`UPDATE words SET seq = x.k FROM (
         SELECT w.id, ${SEQ_KEY} AS k
