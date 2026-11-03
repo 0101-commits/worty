@@ -66,7 +66,7 @@ export default function Session() {
   const n = MORE_SIZES.includes(Number(q.get('n'))) ? Number(q.get('n')) : MORE_N
   const [round, setRound] = useState(0)
   const [only, setOnly] = useState<DeckItem[] | null>(null)
-  const data = useAsync(() => (more ? loadMore(scope, n, only) : loadToday(first)), [more, first, round, scope, n])
+  const data = useAsync(() => (more ? loadMore(scope, n, only) : loadToday(first)), [more, first, round, scope, n, only])
   const again = () => {
     setOnly(null)
     if (more) setRound((k) => k + 1)

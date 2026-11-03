@@ -70,16 +70,20 @@ function Run({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
   useEffect(() => {
     latest.current = s
   }, [s])
-  const sent = useRef(false)
+  // 보낸 결과 수 — 앱을 내릴 때 보낸 뒤에도 이어서 넘긴 것은 판 끝에 마저 보낸다
+  const sent = useRef(0)
   const save = useCallback(
     (keepalive: boolean) => {
-      const p = latest.current.pending
-      if (sent.current || !p.length) return
-      sent.current = true
+      const p = latest.current.pending.slice(sent.current)
+      if (!p.length) return
+      sent.current = latest.current.pending.length
+      dispatch({ type: 'flush' }) // 보낸 채점은 되돌리지 않는다(되돌리기 기록을 비운다)
+      // 단어마다 마지막 답만(판 안에서 X 뒤 O 로 고친 단어는 「다시」로 보내지 않는다 — 검토 반영)
+      const last = new Map(p.map((r) => [r.word_id, r] as const))
       api
-        .savePractice({ mode: 'flip', results: p.map((r) => ({ word_id: r.word_id, correct: r.rating >= 2, at: r.reviewed_at })) }, keepalive)
+        .savePractice({ mode: 'flip', results: [...last.values()].map((r) => ({ word_id: r.word_id, correct: r.rating >= 2, at: r.reviewed_at })) }, keepalive)
         .then(
-          (r) => !keepalive && setMoved(r.relearn?.length ?? 0),
+          (r) => !keepalive && setMoved((m) => (m ?? 0) + (r.relearn?.length ?? 0)),
           (e) => !keepalive && toast(T.saveFail(errorText(e)), 'cautionary'),
         )
     },
@@ -88,8 +92,17 @@ function Run({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
   useEffect(() => {
     if (s.finished) save(false)
   }, [s.finished, save])
-  // 판 중간에 나가면 그때까지 넘긴 것만
-  useEffect(() => () => save(true), [save])
+  // 판 중간에 나가거나 앱을 내리면 그때까지 넘긴 것만(폰에서 내린 앱은 그대로 꺼질 수 있다 — 검토 반영)
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') save(true)
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      save(true)
+    }
+  }, [save])
   if (s.finished) {
     const cards = new Set(s.pending.map((p) => p.word_id)).size
     const again = s.pending.filter((p) => p.rating === 1).length
