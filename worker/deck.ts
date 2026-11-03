@@ -323,7 +323,8 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
     .map((it, i) => ({ it, i, r: retrievability(it.card, now) }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
     .map((x) => x.it);
-  const doneN = (done.results[0] as { n: number }).n;
+  // 끝낸 카드는 덱 채점만(연습에서 틀려 「다시」 된 카드는 오늘 몫이 아니었다 — 몫 전체가 부풀지 않게)
+  const doneN = Number((done.results[0] as { deck: number }).deck) || 0;
   const r = rated.results[0] as { good: number; again: number };
   return {
     date,

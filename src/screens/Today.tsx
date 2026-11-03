@@ -61,7 +61,7 @@ function ArticleSlot() {
   useEffect(() => {
     let live = true
     articleApi.today().then((x) => live && setT(x), () => undefined)
-    articleApi.exprDue(3).then((x) => live && setDue(x.items.length), () => undefined)
+    articleApi.exprDue(10).then((x) => live && setDue(x.items.length), () => undefined)
     return () => {
       live = false
     }
@@ -82,7 +82,7 @@ function ArticleSlot() {
       {due ? (
         <button type="button" className="rd-row" onClick={() => navigate('/expressions')}>
           <span>
-            <b>표현 복습 {due}개</b>
+            <b>표현 복습 {due >= 10 ? '10개+' : `${due}개`}</b>
             <small>기사에서 저장한 표현</small>
           </span>
           <IconChevronRight />
@@ -205,6 +205,12 @@ function PlanCard({ d, onSettings, onChanged }: { d: TodayResponse; onSettings: 
         <p className="small">{reviewOnly ? T.planEmptyReviewOnly : T.planEmptyDesc}</p>
       )}
       {awayNote}
+      {exprN > 0 && (
+        // 카드는 끝났어도 오늘 표현 복습이 남았으면 세션으로(카드가 없으면 표현부터)
+        <Button fullWidth size="large" onClick={() => navigate('/session')}>
+          표현 복습 {exprN}개
+        </Button>
+      )}
       {reviewOnly ? (
         <Button fullWidth variant="outlined" color="primary" onClick={() => setReviewOnly(false)}>
           {T.reviewOnly} · 끄기

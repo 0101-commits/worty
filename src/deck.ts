@@ -36,6 +36,8 @@ export interface DeckSnapshot {
   index: number
   pending: ReviewInput[]
   reshows: Record<string, number>
+  /** 소개 카드를 이미 본 카드(새 단어 · 잊은 단어). 소개 뒤 퀴즈는 몇 장 뒤에 나온다 — 뜻을 보여 준 바로 다음에 같은 뜻을 묻지 않게 */
+  introduced: Record<string, true>
 }
 
 export interface DeckState extends DeckSnapshot {
@@ -61,12 +63,14 @@ export type DeckAction =
   | { type: 'gradeMany'; grades: Array<{ word_id: string; rating: Rating; at: string }> }
   /** 채점 없이 다음 카드로(「⋯ › 넘기기」). 카드는 오늘 몫에 그대로 남는다 */
   | { type: 'skip' }
+  /** 소개 카드를 봤다: 채점 없이 RESHOW_GAP 장 뒤로 보내 그때 퀴즈로 낸다(남은 카드가 적으면 맨 뒤) */
+  | { type: 'introduce' }
   | { type: 'undo' }
   | { type: 'flush' }
   | { type: 'reset'; queue: DeckItem[] }
 
 export function initDeck(queue: DeckItem[], requeueUpTo: Rating = 1, dayEnd: string | null = null): DeckState {
-  return { queue, index: 0, pending: [], reshows: {}, requeueUpTo, dayEnd, history: null, sentCount: 0, finished: queue.length === 0 }
+  return { queue, index: 0, pending: [], reshows: {}, introduced: {}, requeueUpTo, dayEnd, history: null, sentCount: 0, finished: queue.length === 0 }
 }
 
 /** 놓은 순간의 이동(px)·속도(px/ms)로 채점을 정한다. 못 넘으면 null(제자리로). */
@@ -128,13 +132,15 @@ function reinsert(queue: DeckItem[], index: number, item: DeckItem): DeckItem[] 
   return [...queue.slice(0, at), item, ...queue.slice(at)]
 }
 
+const snap = (s: DeckState): DeckSnapshot => ({ queue: s.queue, index: s.index, pending: s.pending, reshows: s.reshows, introduced: s.introduced })
+
 export function deckReducer(s: DeckState, a: DeckAction): DeckState {
   switch (a.type) {
     case 'grade': {
       const item = current(s)
       if (!item) return s
       const id = item.word.id
-      const snapshot: DeckSnapshot = { queue: s.queue, index: s.index, pending: s.pending, reshows: s.reshows }
+      const snapshot = snap(s)
       const pending = [...s.pending, { word_id: id, rating: a.rating, reviewed_at: a.at }]
       let queue = s.queue
       let reshows = s.reshows
@@ -165,12 +171,19 @@ export function deckReducer(s: DeckState, a: DeckAction): DeckState {
       const picked = ids.map((id) => rest[pos(id)])
       let t: DeckState = { ...s, queue: [...s.queue.slice(0, s.index), ...picked, ...rest.filter((it) => !ids.includes(it.word.id))] }
       for (const g of grades) t = deckReducer(t, { type: 'grade', rating: g.rating, at: g.at })
-      return { ...t, history: { queue: s.queue, index: s.index, pending: s.pending, reshows: s.reshows } }
+      return { ...t, history: snap(s) }
     }
     case 'skip': {
       if (s.finished) return s
       const index = s.index + 1
-      return { ...s, index, history: { queue: s.queue, index: s.index, pending: s.pending, reshows: s.reshows }, finished: index >= s.queue.length }
+      return { ...s, index, history: snap(s), finished: index >= s.queue.length }
+    }
+    case 'introduce': {
+      const item = current(s)
+      if (!item) return s
+      const queue = reinsert(s.queue, s.index, item)
+      const index = s.index + 1
+      return { ...s, queue, index, introduced: { ...s.introduced, [item.word.id]: true }, history: snap(s), finished: index >= queue.length }
     }
     case 'undo': {
       if (!s.history) return s

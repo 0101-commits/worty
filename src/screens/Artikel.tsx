@@ -9,6 +9,7 @@ import { useAsync } from '../hooks.ts'
 import { linkTo, navigate } from '../router.ts'
 import { MODE_NAME, T } from '../text.ts'
 import { Emoji, ErrorBox, Top } from '../ui.tsx'
+import { modalOpen } from './Quiz.tsx'
 import './session.css'
 
 const COUNT = 20
@@ -78,6 +79,7 @@ function Game({ items, onAgain }: { items: DeckItem[]; onAgain: () => void }) {
   // 키보드 1 · 2 · 3
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || modalOpen()) return
       const k = Number(e.key)
       if (k >= 1 && k <= 3) answer(ARTS[k - 1])
     }

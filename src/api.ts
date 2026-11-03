@@ -18,6 +18,8 @@ import type {
   TodayResponse,
   WordDetailResponse,
   WordRequestsResponse,
+  StudyTodayResponse,
+  LookupResponse,
   WordsCountsResponse,
   WordsQuery,
   WordsResponse,
@@ -144,7 +146,7 @@ export function prefetchToday() {
 /** 못 보낸 채점이 기기에 남아 있으면 먼저 보낸다(오늘 몫 요청이 그 뒤로 줄 선다).
  *  덱 끝 전송이 실패한 채 오늘 화면으로 오면, 다시 받은 오늘 몫에 방금 채점한 카드가 또 나와 두 번 채점됐다(검토 반영) */
 const sendUnsentFirst = () => {
-  if (readUnsent().length) retryUnsent()
+  if (readUnsent().length || readPractice().length) retryUnsent()
 }
 
 export const api = {
@@ -166,7 +168,13 @@ export const api = {
   /** 연습 결과. 틀린 배운 단어는 서버가 「다시」 채점(오늘 몫 복습에 다시) → 오늘 몫 요청이 이 전송 뒤로 줄 선다 */
   savePractice: (body: PracticeResultsRequest, keepalive = false) => {
     todayPrefetch = null
-    const p = request<PracticeSaveResponse>('POST', '/api/practice', body, keepalive)
+    // 못 보내면 기기에 남겼다가 다음에 열 때 다시(서버는 같은 단어·시각을 두 번 적지 않는다)
+    const id = practiceId(body)
+    writePractice([...readPractice().filter((u) => u.id !== id), { id, body }])
+    const p = request<PracticeSaveResponse>('POST', '/api/practice', body, keepalive).then((r) => {
+      writePractice(readPractice().filter((u) => u.id !== id))
+      return r
+    })
     inflight = inflight.then(() => p).catch(() => undefined)
     return p
   },
@@ -200,6 +208,13 @@ export const api = {
   /** 「이상해요」 → 다음 검토 때 먼저 */
   report: (id: string, body: ReportRequest) => request<{ ok: boolean }>('POST', `/api/words/${encodeURIComponent(id)}/report`, body),
   requests: () => request<WordRequestsResponse>('GET', '/api/requests'),
+  /** 오늘 공부에 넣기: 새 단어 = 오늘 새 단어 맨 앞 · 배운 단어 = 오늘 복습으로 */
+  studyToday: (id: string) => {
+    todayPrefetch = null
+    return request<StudyTodayResponse>('POST', `/api/word/${encodeURIComponent(id)}/today`)
+  },
+  /** 본문 낱말(활용형)로 단어장 찾기 */
+  lookup: (form: string) => request<LookupResponse>('GET', '/api/lookup?' + qs({ form })),
   addRequest: (text: string, url?: string) =>
     request<{ ok: boolean; id: number; duplicate: boolean }>('POST', '/api/requests', { text, ...(url ? { url } : {}) }),
   /** 100개씩, before(번호)를 주면 그보다 앞의 것 */
@@ -233,6 +248,19 @@ const readUnsent = (): Unsent[] => {
 }
 const writeUnsent = (list: Unsent[]) => save(UNSENT_KEY, list.length ? JSON.stringify(list) : null)
 
+// 연습 결과(+10개 · 연습) — 채점과 같은 방식으로 기기에 남긴다
+const PRACTICE_KEY = 'wortling.unsentPractice'
+type UnsentPractice = { id: string; body: PracticeResultsRequest }
+const readPractice = (): UnsentPractice[] => {
+  try {
+    return JSON.parse(load(PRACTICE_KEY) ?? '[]') as UnsentPractice[]
+  } catch {
+    return []
+  }
+}
+const writePractice = (list: UnsentPractice[]) => save(PRACTICE_KEY, list.length ? JSON.stringify(list) : null)
+const practiceId = (b: PracticeResultsRequest) => `${b.mode}:${b.results[0]?.at}:${b.results.length}`
+
 const unsentId = (req: ReviewsRequest) => `${req.session_id}:${req.reviews[0]?.reviewed_at}:${req.reviews.length}`
 
 /** 200개가 넘으면 나눠 차례로 보낸다(splitReviews). 묶음마다 따로 적어 두고, 보낸 묶음만 지운다 */
@@ -265,7 +293,15 @@ export function retryUnsent(): Promise<number> {
         await sendReviews(u.req)
         sent += u.req.reviews.length
       } catch {
-        break // 아직 안 됨 → 다음에
+        return sent // 아직 안 됨 → 다음에
+      }
+    }
+    for (const u of readPractice()) {
+      try {
+        await request<PracticeSaveResponse>('POST', '/api/practice', u.body)
+        writePractice(readPractice().filter((x) => x.id !== u.id))
+      } catch {
+        break
       }
     }
     return sent

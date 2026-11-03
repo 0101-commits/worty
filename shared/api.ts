@@ -314,6 +314,30 @@ export interface WordRequestItem {
 export interface WordRequestsResponse {
   items: WordRequestItem[];
 }
+/** 「오늘 공부에 넣기」 결과: new = 오늘 새 단어 목록 맨 앞 · review = 오늘 복습으로 · already = 이미 오늘 몫에 있음 */
+export interface StudyTodayResponse {
+  ok: true;
+  mode: 'new' | 'review' | 'already';
+}
+/** 기사 낱말 바로 넣기 결과(created = 이번에 새로 만든 단어) */
+export interface AddFromArticleResponse extends StudyTodayResponse {
+  id: string;
+  created: boolean;
+}
+/** 본문 낱말(활용형)로 찾은 단어장 단어 */
+export interface LookupItem {
+  id: string;
+  lemma: string;
+  pos: string;
+  gender: string | null;
+  gloss_ko: string | null;
+  level: string;
+  learned: boolean;
+  suspended: boolean;
+}
+export interface LookupResponse {
+  items: LookupItem[];
+}
 export interface ChangeItem {
   id: number;
   word_id: string;

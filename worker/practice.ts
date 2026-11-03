@@ -37,7 +37,7 @@ export async function practiceItems(
       ? db
           .prepare(
             `SELECT ${ITEM_SELECT} FROM words w JOIN cards c ON c.word_id = w.id
-             WHERE w.id IN (SELECT word_id FROM practice WHERE at >= ? GROUP BY word_id HAVING max(id) = max(CASE WHEN correct = 0 THEN id END))
+             WHERE c.suspended = 0 AND w.id IN (SELECT word_id FROM practice WHERE at >= ? GROUP BY word_id HAVING max(id) = max(CASE WHEN correct = 0 THEN id END))
              ORDER BY random() LIMIT ?`,
           )
           .bind(studyDayStartUtc(addDays(day, -(WRONG_DAYS - 1))), take)
@@ -85,9 +85,18 @@ export async function savePractice(db: D1Database, b: PracticeResultsRequest | n
       throw bad('bad_result');
   }
   if (!b.results.length) return { ok: true, count: 0, relearn: [] };
-  const relearn = await relearnStatements(db, b.results, now);
+  // 같은 결과(단어 · 시각)를 다시 받으면 건너뛴다 — 앱은 전송 실패 때 기기에 남겼다가 다시 보낸다(응답만 잃은 경우 두 번 오지 않게)
+  const ats = b.results.map((r) => new Date(r.at).toISOString()).sort();
+  const had = await db
+    .prepare('SELECT word_id, at FROM practice WHERE at BETWEEN ? AND ?')
+    .bind(ats[0], ats[ats.length - 1])
+    .all<{ word_id: string; at: string }>();
+  const seen = new Set(had.results.map((x) => `${x.word_id}|${x.at}`));
+  const results = b.results.filter((r) => !seen.has(`${r.word_id}|${new Date(r.at).toISOString()}`));
+  if (!results.length) return { ok: true, count: 0, relearn: [] };
+  const relearn = await relearnStatements(db, results, now);
   await db.batch([
-    ...b.results.map((r) =>
+    ...results.map((r) =>
       db
         // CAST: INSERT … SELECT 의 자리표시자는 Postgres 가 글자로 보고 정수 칸에 못 넣는다
         .prepare('INSERT INTO practice(mode, word_id, correct, at) SELECT ?, id, CAST(? AS INTEGER), ? FROM words WHERE id = ?')
@@ -95,7 +104,7 @@ export async function savePractice(db: D1Database, b: PracticeResultsRequest | n
     ),
     ...relearn.stmts,
   ]);
-  return { ok: true, count: b.results.length, relearn: relearn.ids };
+  return { ok: true, count: results.length, relearn: relearn.ids };
 }
 
 /** 틀린 단어마다 첫 틀림 시각으로 「다시」 채점(덱 채점과 같은 계산 — worker/fsrs.ts applyRating).

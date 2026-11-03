@@ -24,7 +24,7 @@ type ArticleRow = {
 
 const LIST_COLS = 'id, source, url, title, category, published_at, day, role, words, status, opened_at, done_at, quiz_score';
 
-function parseLesson(s: string | null): unknown {
+export function parseLesson(s: string | null): unknown {
   if (!s) return null;
   try {
     return JSON.parse(s);

@@ -12,14 +12,7 @@ import { Example, ErrorBox, LevelBadge, Lemma, POS_LABEL, Top, useToaster } from
 import type { WordDetailResponse } from '../../shared/api.ts'
 import './word-detail.css'
 
-/** 브라우저 음성으로 독일어 읽기(없으면 조용히 건너뜀) */
-function speak(text: string) {
-  if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = 'de-DE'
-  window.speechSynthesis.speak(u)
-}
+import { speak } from '../tts.ts'
 
 /** 「다음 복습 11/13 · O 6 · X 1」 — 내부 용어(안정도 · 난이도) 없이 날짜와 O·X 수만 */
 function myRecord(d: WordDetailResponse): string {
@@ -55,6 +48,21 @@ function Body({ d, reload }: { d: WordDetailResponse; reload: () => void }) {
   const [busy, setBusy] = useState(false)
   const [imgBroken, setImgBroken] = useState(false)
   const w = d.word
+  const [today, setToday] = useState<string | null>(null)
+  const studyToday = async () => {
+    setBusy(true)
+    try {
+      const r = await api.studyToday(w.id)
+      const msg = r.mode === 'new' ? '오늘 새 단어 맨 앞에 넣었어요' : r.mode === 'review' ? '오늘 복습에 넣었어요' : '이미 오늘 공부에 있어요'
+      setToday(msg)
+      toast(msg, 'positive')
+      if (d.card.suspended) reload()
+    } catch (e) {
+      toast(errorText(e), 'negative')
+    } finally {
+      setBusy(false)
+    }
+  }
   const toggleSuspend = async () => {
     setBusy(true)
     try {
@@ -73,7 +81,7 @@ function Body({ d, reload }: { d: WordDetailResponse; reload: () => void }) {
         {w.image && !imgBroken && <img className="wdt-img" src={imgSrc(w.id)} alt="" draggable={false} onError={() => setImgBroken(true)} />}
         <div className="wdt-head">
           <Lemma word={w} className="wdt-lemma" />
-          <IconButton size="medium" aria-label={`${w.lemma} 듣기`} onClick={() => speak((w.pos === 'noun' && w.gender ? w.gender + ' ' : '') + w.lemma)}>
+          <IconButton size="medium" aria-label={`${w.lemma} 듣기`} onClick={() => speak((w.pos === 'noun' && w.gender ? w.gender + ' ' : '') + w.lemma) || toast('이 기기에 독일어 음성이 없어요')}>
             <IconPlay />
           </IconButton>
         </div>
@@ -100,6 +108,9 @@ function Body({ d, reload }: { d: WordDetailResponse; reload: () => void }) {
         <p className="wdt-rec-line">{myRecord(d)}</p>
       </Card>
 
+      <Button fullWidth size="large" loading={busy} disabled={!!today} onClick={studyToday}>
+        {today ?? '오늘 공부에 넣기'}
+      </Button>
       <div className="wdt-actions">
         <Button variant="outlined" color="assistive" loading={busy} onClick={toggleSuspend}>
           {d.card.suspended ? '제외 풀기' : '제외'}
@@ -112,6 +123,13 @@ function Body({ d, reload }: { d: WordDetailResponse; reload: () => void }) {
   )
 }
 
+/** 문장에서 그 꼴만 굵게(낱말 경계 — 「an」이 「Anlass」 속에서 굵어지지 않게) */
+function boldWord(de: string, form: string) {
+  const esc = form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = de.split(new RegExp(`(?<![A-Za-zÄÖÜäöüß])(${esc})(?![A-Za-zÄÖÜäöüß])`))
+  return parts.map((p, i) => (i % 2 === 1 ? <b key={i}>{p}</b> : p))
+}
+
 /** 기사 속 문장(v11 4단계): 오늘의 기사에서 이 단어가 나온 문장, 최근 3개. 없으면 안 그린다 */
 function InArticles({ id }: { id: string }) {
   const r = useAsync(() => articleApi.wordArticles(id), [id])
@@ -122,7 +140,7 @@ function InArticles({ id }: { id: string }) {
       <h3>기사 속 문장</h3>
       {items.map((x) => (
         <a key={x.article_id} className="wdt-art" {...linkTo(`/article/${x.article_id}`)}>
-          <span lang="de">{x.de.split(x.form).flatMap((part, i, arr) => (i < arr.length - 1 ? [part, <b key={i}>{x.form}</b>] : [part]))}</span>
+          <span lang="de">{boldWord(x.de, x.form)}</span>
           <span className="ko">{x.ko}</span>
           <small>{x.day.slice(5).replace('-', '/')} · {x.title}</small>
         </a>

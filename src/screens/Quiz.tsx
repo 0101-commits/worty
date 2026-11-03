@@ -123,7 +123,7 @@ export function ChoiceView({ q, onAnswer, onNext }: ViewProps<ChoiceQ>) {
               {picked ? <mark className="hit">{q.cloze.hit}</mark> : <span className="blank" role="img" aria-label={T.blank} />}
               {q.cloze.after}
             </p>
-            <p className="small muted">{w.example_ko}</p>
+            {picked || hint ? <p className="small muted">{w.example_ko}</p> : null}
           </>
         ) : q.mode === 'meaning' ? (
           <>

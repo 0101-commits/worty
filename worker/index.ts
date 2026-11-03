@@ -1,5 +1,6 @@
 // Wortling Worker: 정적 자산(dist) 앞에서 /api/* 와 /img/* 만 받는다 + cron 두 개.
 import { ARTICLE_ROUTES } from './articles.ts';
+import { STUDY_ROUTES } from './study.ts';
 import type { Env } from './env.ts';
 import type {
   AdminWordsRequest,
@@ -96,7 +97,11 @@ const postReviews: Handler = async ({ req, env }) => {
     if (Number.isNaN(Date.parse(r.reviewed_at))) throw bad('bad_reviewed_at');
   }
   if (body.reviews.length === 0) return json({ applied: 0, cards: [] } satisfies ReviewsResponse);
-  const reviews = [...body.reviews].sort((a, b) => a.reviewed_at.localeCompare(b.reviewed_at));
+  // 시각은 한 꼴(toISOString)로 — 학습일 셈이 ISO 글자 비교라 꼴이 다르면 어긋난다. 기기 시계가 앞서 있으면 지금으로
+  const nowMs = Date.now();
+  const reviews = (body.reviews as ReviewInput[])
+    .map((r) => ({ ...r, reviewed_at: new Date(Math.min(Date.parse(r.reviewed_at), nowMs + 60_000)).toISOString() }))
+    .sort((a, b) => a.reviewed_at.localeCompare(b.reviewed_at));
   const ids = [...new Set(reviews.map((r) => r.word_id))];
 
   // 카드 불러오기(바인딩 100개 상한이라 100개씩) + 이미 적힌 채점(멱등)
@@ -110,7 +115,10 @@ const postReviews: Handler = async ({ req, env }) => {
       .all();
     for (const row of results) cards.set(String(row.word_id), row as unknown as Card);
   }
-  for (const id of ids) if (!cards.has(id)) throw new HttpError(404, `unknown word_id ${id}`);
+  // 없는 단어(지운 카드)의 채점은 건너뛴다 — 404 로 묶음 전체를 거절하면 기기에 남은 채점이 영영 못 나간다
+  const known = reviews.filter((r) => cards.has(r.word_id));
+  if (!known.length) return json({ applied: 0, cards: [] } satisfies ReviewsResponse);
+  reviews.splice(0, reviews.length, ...known);
   const first = reviews[0].reviewed_at;
   const last = reviews[reviews.length - 1].reviewed_at;
   const { results: existing } = await env.DB.prepare(
@@ -289,7 +297,7 @@ const artikel: Handler = async ({ env, url }) => {
   const n = clamp(intParam(url.searchParams.get('n'), 20), 1, 50);
   const noun = "w.pos = 'noun' AND w.gender IN ('der', 'die', 'das')";
   const seen = await env.DB.prepare(
-    `SELECT ${ITEM_SELECT} FROM words w JOIN cards c ON c.word_id = w.id WHERE ${noun} AND c.state IN (1, 2, 3) ORDER BY random() LIMIT ?`,
+    `SELECT ${ITEM_SELECT} FROM words w JOIN cards c ON c.word_id = w.id WHERE ${noun} AND c.state IN (1, 2, 3) AND c.suspended = 0 ORDER BY random() LIMIT ?`,
   )
     .bind(n)
     .all();
@@ -711,6 +719,7 @@ const getImage: Handler = async ({ env, params: [name] }) => {
 
 const routes: Route[] = [
   ...ARTICLE_ROUTES,
+  ...STUDY_ROUTES,
   ['GET', /^\/api\/health$/, health, true],
   ['GET', /^\/img\/([\w-]+)\.webp$/, getImage, true],
   ['GET', /^\/api\/today$/, today],

@@ -36,7 +36,7 @@ export default function Onboarding({ settings, onDone }: { settings: Settings; o
               </div>
               <div className="kv"><span>범위</span><b>{LEVELS.slice(0, LEVELS.indexOf(level) + 1).join(' → ')}</b></div>
             </div>
-            <p className="lead">아는 단어는 카드에서 「쉬움」으로 밀면 금방 뒤로 빠져요. 따로 시험은 없어요.</p>
+            <p className="lead">아는 단어는 카드에서 O(오른쪽으로 밀기)를 누르면 점점 뜸하게 나와요. 따로 시험은 없어요.</p>
             <Button fullWidth size="large" onClick={() => setStep(2)}>
               다음
             </Button>

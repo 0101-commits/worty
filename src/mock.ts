@@ -292,6 +292,18 @@ export async function mockHandle(method: string, path: string, body?: unknown): 
   if (p === '/api/words') return wordsList(url.searchParams)
   if (p === '/api/words/counts') return { weak: cards.filter((c) => c.lapses >= 2).length, week: cards.filter((c) => (c.introduced_at ?? '') > ago(7)).length }
   if (p === '/api/stats/records') return records()
+  if (/^\/api\/word\/[\w-]+\/today$/.test(p) && method === 'POST') {
+    const c = cards.find((x) => x.word_id === p.split('/')[3])
+    if (!c) return { ok: true, mode: 'review' } // 목업 기사 낱말(w0100 등)은 카드 목록에 없다
+    c.suspended = 0
+    return { ok: true, mode: c.state === 0 ? 'new' : 'review' }
+  }
+  if (p === '/api/lookup') {
+    const f = (url.searchParams.get('form') ?? '').toLowerCase()
+    const hit = words.filter((w) => f && (w.lemma.toLowerCase() === f || f.startsWith(w.lemma.toLowerCase().slice(0, Math.max(4, w.lemma.length - 2)))))
+    return { items: hit.slice(0, 3).map((w) => ({ id: w.id, lemma: w.lemma, pos: w.pos, gender: w.gender, gloss_ko: w.gloss_ko, level: w.level, learned: (cards.find((c) => c.word_id === w.id)?.reps ?? 0) > 0, suspended: false })) }
+  }
+  if (/^\/api\/articles\/\d+\/add-word$/.test(p) && method === 'POST') return { ok: true, mode: 'new', id: 'w900', created: true }
   if (/^\/api\/word\/[\w-]+\/suspend$/.test(p) && method === 'POST') {
     const c = cards.find((x) => x.word_id === p.split('/')[3])
     if (c) c.suspended = (body as { suspended: boolean }).suspended ? 1 : 0

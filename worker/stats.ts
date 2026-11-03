@@ -51,7 +51,7 @@ export async function records({ env }: Ctx): Promise<Response> {
     // 날짜별 채점 수와 X(다시) 수. 학습일 = 한국 시각 − 4시간의 날짜
     env.DB.prepare(
       `SELECT ${dayOf(env.DB, 'reviewed_at', 9 - DAY_START_H)} AS day, count(*) AS n, sum(CASE WHEN rating = 1 THEN 1 ELSE 0 END) AS x
-       FROM reviews WHERE reviewed_at >= ? AND undone = 0 GROUP BY day ORDER BY day`,
+       FROM reviews WHERE reviewed_at >= ? AND undone = 0 AND (session_id IS NULL OR session_id != 'practice') GROUP BY day ORDER BY day`,
     ).bind(studyDayStartUtc(since)),
     // 앞으로 7학습일 안에 올 카드(밀린 카드 포함) — 날짜별
     env.DB.prepare(

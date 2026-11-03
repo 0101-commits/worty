@@ -99,13 +99,6 @@ export default function SettingsScreen({ settings, onChange }: { settings: Setti
               ))}
             </SegmentedControl>
           </div>
-          <div className="kv col">
-            <span>카드 밀기</span>
-            <SegmentedControl size="small" value={String(settings.swipe_mode)} onValueChange={(v) => onChange({ swipe_mode: v === '2' ? 2 : 4 })}>
-              <SegmentedControlItem value="4">4방향</SegmentedControlItem>
-              <SegmentedControlItem value="2">2방향(← →)</SegmentedControlItem>
-            </SegmentedControl>
-          </div>
         </div>
 
         <h3 className="sec-t">알림</h3>

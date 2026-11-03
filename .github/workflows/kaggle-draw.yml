@@ -62,7 +62,7 @@ jobs:
       - name: Kaggle 도구·인증
         if: env.MODE != 'revert'
         run: |
-          pip install -q kaggle
+          pip install -q kaggle six
           kaggle --version
           # 옛 키는 KAGGLE_KEY, KGAT_ 토큰은 KAGGLE_API_TOKEN — 둘 다 내보낸다
           echo "KAGGLE_KEY=$KAGGLE_SECRET" >> "$GITHUB_ENV"

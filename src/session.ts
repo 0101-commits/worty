@@ -94,6 +94,8 @@ export interface PlanCtx {
   pool: PoolWord[]
   /** 이 세션에서 이미 본 카드(덱 reshows) — 짝 맞추기로 앞당겨 오지 않는다(다시 보기 간격을 지키려고) */
   seen?: Record<string, number>
+  /** 소개 카드를 이미 본 카드(덱 introduced) — 이번엔 소개 없이 퀴즈만 */
+  introduced?: Record<string, true>
   /** 바로 앞 단계 — 짝 맞추기를 두 번 잇달아 내지 않는다 */
   lastKind?: Kind | null
   /** 「+10개」 연습: 뒤집기 · 관사 · 소개 없이 퀴즈만(결과는 연습 기록 /api/practice) */
@@ -126,7 +128,7 @@ export function planStep(queue: DeckItem[], index: number, ctx: PlanCtx): Step |
   const now = ctx.now ?? new Date()
   const rand = ctx.rand ?? Math.random
   const practice = !!ctx.practice
-  const one = (kind: Kind, q: Step['q'], intro = false): Step => ({ kind, intro, items: [item], q })
+  const one = (kind: Kind, q: Step['q'], intro = false): Step => ({ kind, intro: intro && !ctx.introduced?.[item.word.id], items: [item], q })
   const quiz = (modes: Array<'cloze' | 'meaning'>, intro: boolean) => {
     for (const m of modes) {
       const q = makeQuestion(m, item, ctx.pool, rand)
