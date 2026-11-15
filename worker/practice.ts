@@ -79,7 +79,7 @@ export async function practiceItems(
  * 잊은 수(lapses)·쉬게 하기(suspended)는 그대로 둔다 — 보기를 잘못 누른 것까지 세면 8번에 카드가 덱에서 빠진다(검토 반영).
  */
 export async function savePractice(db: D1Database, b: PracticeResultsRequest | null, now: Date = new Date()): Promise<PracticeSaveResponse> {
-  if (!b || !(PRACTICE_MODES.includes(b.mode) || LEGACY_MODES.includes(b.mode)) || !Array.isArray(b.results)) throw bad('bad_request');
+  if (!b || !((PRACTICE_MODES as readonly string[]).includes(b.mode) || LEGACY_MODES.includes(b.mode)) || !Array.isArray(b.results)) throw bad('bad_request');
   if (b.results.length > 200) throw bad('too_many_results');
   for (const r of b.results) {
     if (typeof r?.word_id !== 'string' || typeof r.correct !== 'boolean' || typeof r.at !== 'string' || Number.isNaN(Date.parse(r.at)))

@@ -16,6 +16,7 @@ import { REF_FILE, imagePrompt } from './style.mjs';
 import { stripPin } from './scene.mjs';
 import { buildPrompt } from './judge.mjs';
 import { pixelStats, ocrChars, verdict, frameStats } from './imgcheck.mjs';
+import { judgeWhy } from './judge-why.mjs';
 import { ledgerConfig, loadLedger, saveLedger, recordDraw, recordAuto, recordJudge } from './ledger.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -285,7 +286,7 @@ async function collect(dir) {
     // 판정을 못 받은(parse 실패) 그림은 올리지 않고 장부에도 안 적는다
     if (judged) ops.judges.push([j.id, judgeOk]);
     if (!(judgeOk && autoOk)) {
-      const why = [!judgeOk ? `judge: ${String(it.verdict?.why ?? 'null').slice(0, 120)}` : null, ...r.why].filter(Boolean).join(' / ');
+      const why = [!judgeOk ? judgeWhy(it.verdict) : null, ...r.why].filter(Boolean).join(' / ');
       sum.failed.push({ id: j.id, why });
       writeFileSync(path.join(REJECT_DIR, `${j.id}_kaggle_${judgeOk ? 'check' : 'meaning'}.webp`), await toWebp(r.buf));
       continue;
