@@ -47,6 +47,8 @@ const LEDGER_FILE = path.join(ROOT, '.data', 'ledger.json');
 const BATCH = 10;
 // 검사 대기(검사 AI 가 막혀 못 올린 그림) 상한. 이만큼 쌓이면 그리기를 멈춘다 — 검사 AI 가 며칠 막혀도 무한히 쌓이지 않게. 하루 그리기 상한과 같은 80
 const PENDING_MAX = Number(process.env.DAILY_PENDING_MAX) || 80;
+// 어려운 단어 후보를 하루에 몇 개까지 확인할지(지워진 단어·그림 있는 단어를 건너뛰는 데 드는 앱 요청 상한)
+const HARD_SCAN_MAX = 30;
 // 자동 검사·판정에서 떨어진 그림(근거용, 장당 수십 KB). 깃허브 실행이면 daily.yml 이 artifact 로 올린다. .data 는 git 제외
 const REJECT_DIR = path.join(ROOT, '.data', 'rejected');
 const DRY = process.argv.includes('--dry');
@@ -244,7 +246,28 @@ try {
       add(pend.front);
       add(restyle);
       // 검사 두 번 탈락한 어려운 단어 — 참고 그림 있는 큰 모델로 하루 hardMax 개까지(G3). 맨 앞에 둔다
-      const hardList = hardCandidates(ledger, cfg).slice(0, cfg.hardMax);
+      // 지워진 단어(404)·그사이 그림이 생긴 단어는 장부에서 빼고 다음 후보로 넘어간다.
+      // 빼지 않으면 날마다 같은 맨 앞 단어에서 몫이 사라진다(11-09~11-15 w0009 에 막혀 큰 모델 0장)
+      const hardList = [];
+      let hardScanned = 0;
+      for (const id of hardCandidates(ledger, cfg)) {
+        if (hardList.length >= cfg.hardMax || hardScanned >= HARD_SCAN_MAX) break;
+        if (pend.left.has(id) || ids.includes(id)) continue;
+        hardScanned++;
+        let d;
+        try {
+          d = await api(`/api/word/${id}`);
+        } catch (e) {
+          if (!/→ 404/.test(String(e.message))) throw e;
+        }
+        if (!d || d.word.image) {
+          delete ledger.fails[id];
+          (log.hard_dropped ??= []).push(id);
+          continue;
+        }
+        hardList.push(id);
+      }
+      if (log.hard_dropped) console.log(`어려운 단어 목록에서 뺌(지워졌거나 그림 있음) ${log.hard_dropped.length}개: ${log.hard_dropped.join(',')}`);
       for (const id of hardList) hard.add(id);
       ids.unshift(...hardList.filter((id) => !pend.left.has(id) && !ids.includes(id)));
       if (budget > ids.length) add((await api(`/api/admin/runway?text=0&image=${budget - ids.length + 5 + pend.left.size}`)).need_image.map((w) => w.id));

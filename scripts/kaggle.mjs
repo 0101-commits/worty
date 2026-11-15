@@ -30,6 +30,9 @@ const REJECT_DIR = path.join(ROOT, '.data', 'rejected');
 const QUEUE_DAYS = 3; // 이 날짜가 지나면 못 거둔 걸로 보고 다시 뽑을 수 있다
 // 단어 id 형식(seed/build.mjs: w0001…). 내려받은 커널 결과는 믿지 않는다 — 올릴 id 는 우리가 맡길 때 적어 둔 목록(QUEUE_FILE)에서만, 형식도 한 번 더 본다
 const ID_RE = /^w\d{4,6}$/;
+// 앱 runway 가 한 번에 주는 그림 후보 상한(worker/index.ts 와 같게). 검사 두 번 떨어진 단어가 쌓이면 이 창을 차지해
+// 맡길 단어가 줄어든다(11-06 250 → 11-15 98) — 그래서 500 에서 늘림
+const RUNWAY_MAX = 2000;
 
 async function api(p, { method = 'GET', body, raw, headers = {} } = {}) {
   const res = await fetch(APP_URL + p, {
@@ -160,8 +163,9 @@ async function pick(n, dir) {
   const skip = (id) => pending.has(id) || id in queue || (ledger.fails[id] ?? 0) >= cfg.hardFails;
   // daily.mjs 와 같은 규칙: runway(공부 중인 카드 먼저 → 학습 순서) 중 장면이 있는 그림 없는 단어
   const want = n + pending.size + Object.keys(queue).length + Object.keys(ledger.fails).length + 20;
-  const { need_image } = await api(`/api/admin/runway?text=0&image=${Math.min(500, want)}`);
-  console.log(`그림 없고 장면 있는 단어 ${need_image.length}(요청 ${Math.min(500, want)}) · 대기 ${pending.size} · 맡김 ${Object.keys(queue).length}`);
+  const asked = Math.min(RUNWAY_MAX, want);
+  const { need_image } = await api(`/api/admin/runway?text=0&image=${asked}`);
+  console.log(`그림 없고 장면 있는 단어 ${need_image.length}(요청 ${asked}) · 대기 ${pending.size} · 맡김 ${Object.keys(queue).length}`);
   const jobs = [];
   for (const w of need_image) {
     if (jobs.length >= n) break;
