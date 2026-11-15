@@ -44,11 +44,14 @@ meta = {'gpu': GPU, 'dtype': str(dtype), 'draw_repo': DRAW_REPO, 'judge_repo': J
 items = {j['id']: {'cands': []} for j in jobs}
 
 
+EDGE_WHITE_MIN = 0  # imgcheck.mjs LIMITS.edgeWhite 와 같게(11-15 흰 바탕 기준 끔, 되돌리면 0.9)
+
+
 def pixel_why(img):
     """scripts/imgcheck.mjs pixelStats + verdict 의 화소 3항목(흰 바탕·색 수·검은 선)을 그대로 옮김. 러너가 같은 검사(+글자 OCR·틀)를 다시 한다.
     여기서 먼저 걸러야 후보 2장 중 화소 검사를 통과한 그림만 판정에 올라간다 — 예전엔 판정 통과한 첫 장만 내려가서
     그 장이 화소 검사에 떨어지면 둘째 장은 기회가 없었다(11-15 점검: 탈락 82 중 화소 38)."""
-    a = np.asarray(img.convert('RGB').resize((256, 192), Image.LANCZOS), dtype=np.int32)
+    a = np.asarray(img.convert('RGB').resize((256, 192), Image.Resampling.LANCZOS), dtype=np.int32)
     h, w = a.shape[:2]
     ex, ey = round(w * 0.1), round(h * 0.1)
     lum = 0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]
@@ -59,7 +62,7 @@ def pixel_why(img):
     bins = ((a[..., 0] >> 6) << 4) | ((a[..., 1] >> 6) << 2) | (a[..., 2] >> 6)
     top4 = round(float(np.sort(np.bincount(bins.ravel(), minlength=64))[::-1][:4].sum() / (w * h)), 3)
     why = []
-    if edge_white < 0.9:
+    if edge_white < EDGE_WHITE_MIN:
         why.append(f'edge_white {edge_white}')
     if top4 < 0.9:
         why.append(f'colors {top4}')
