@@ -44,6 +44,30 @@ meta = {'gpu': GPU, 'dtype': str(dtype), 'draw_repo': DRAW_REPO, 'judge_repo': J
 items = {j['id']: {'cands': []} for j in jobs}
 
 
+def pixel_why(img):
+    """scripts/imgcheck.mjs pixelStats + verdict 의 화소 3항목(흰 바탕·색 수·검은 선)을 그대로 옮김. 러너가 같은 검사(+글자 OCR·틀)를 다시 한다.
+    여기서 먼저 걸러야 후보 2장 중 화소 검사를 통과한 그림만 판정에 올라간다 — 예전엔 판정 통과한 첫 장만 내려가서
+    그 장이 화소 검사에 떨어지면 둘째 장은 기회가 없었다(11-15 점검: 탈락 82 중 화소 38)."""
+    a = np.asarray(img.convert('RGB').resize((256, 192), Image.LANCZOS), dtype=np.int32)
+    h, w = a.shape[:2]
+    ex, ey = round(w * 0.1), round(h * 0.1)
+    lum = 0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]
+    edge = np.ones((h, w), bool)
+    edge[ey:h - ey, ex:w - ex] = False
+    edge_white = round(float((lum[edge] >= 245).mean()), 3)
+    black = round(float((lum < 60).mean()), 3)
+    bins = ((a[..., 0] >> 6) << 4) | ((a[..., 1] >> 6) << 2) | (a[..., 2] >> 6)
+    top4 = round(float(np.sort(np.bincount(bins.ravel(), minlength=64))[::-1][:4].sum() / (w * h)), 3)
+    why = []
+    if edge_white < 0.9:
+        why.append(f'edge_white {edge_white}')
+    if top4 < 0.9:
+        why.append(f'colors {top4}')
+    if black < 0.015 or black > 0.12:
+        why.append(f'black {black}')
+    return why
+
+
 def save():
     json.dump({'meta': meta, 'items': items}, open(f'{OUT}/verdicts.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 
@@ -87,8 +111,9 @@ else:
             blank = float(arr.std()) < 4  # 새까만·단색 그림(가끔 나옴)
             f = f'{CAND}/{j["id"]}_{t}.png'
             img.save(f)
-            items[j['id']]['cands'].append({'file': f, 'seed': seed, 'draw_sec': sec, 'blank': blank})
-            print(f'그림 {j["id"]} #{t} {sec}s blank={blank}', flush=True)
+            pix = [] if blank else pixel_why(img)
+            items[j['id']]['cands'].append({'file': f, 'seed': seed, 'draw_sec': sec, 'blank': blank, 'pixel': pix})
+            print(f'그림 {j["id"]} #{t} {sec}s blank={blank} pixel={pix}', flush=True)
     meta['draw_sec_avg'] = round(sum(draw_secs) / max(1, len(draw_secs)), 2)
     meta['drawn'] = len(draw_secs)
     save()
@@ -186,6 +211,9 @@ for j in jobs:
         if c['blank']:
             c['verdict'] = {'ok': False, 'why': '빈 그림'}
             continue
+        if c.get('pixel'):  # 화소 검사에 이미 떨어진 그림은 판정하지 않는다(GPU 시간도 아낀다)
+            c['verdict'] = {'ok': False, 'why': 'pixel: ' + ' / '.join(c['pixel']), 'pixel': True}
+            continue
         s = time.time()
         v, raw, desc = ask(j, c['file'])
         c['desc'] = desc
@@ -197,7 +225,9 @@ for j in jobs:
         if v and v['ok']:
             chosen = c
             break
-    pick = chosen or next((c for c in it['cands'] if not c['blank']), None)
+    # 못 고르면 판정까지 간 그림을 남긴다(탈락 이유가 뜻 판정이면 그쪽이 더 쓸모 있다) → 없으면 아무 그림
+    pick = chosen or next((c for c in it['cands'] if not c['blank'] and not c.get('pixel')), None) \
+        or next((c for c in it['cands'] if not c['blank']), None)
     it['ok'] = bool(chosen)
     it['verdict'] = pick['verdict'] if pick else {'ok': False, 'why': '빈 그림'}
     it['tries'] = len(it['cands'])
