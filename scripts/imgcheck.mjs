@@ -11,7 +11,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
-export const LIMITS = { edgeWhite: 0.9, top4: 0.9, blackMin: 0.015, blackMax: 0.12 };
+// edgeWhite 0 = 흰 바탕 기준 끔(2026-11-15 사용자 결정 「배경 있어도 올리기」: 뜻 판정 통과인데 배경이 가장자리까지 차서 버려지던 그림이 하루 약 30장).
+// 값은 계속 재서 기록한다(daily 로그 edgeWhite). 되돌리려면 0.9
+export const LIMITS = { edgeWhite: 0, top4: 0.9, blackMin: 0.015, blackMax: 0.12 };
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /** 화소 통계 3개(빠름, 순수 계산) */
