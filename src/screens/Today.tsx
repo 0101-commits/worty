@@ -143,6 +143,8 @@ function PlanCard({ d, onSettings, onChanged }: { d: TodayResponse; onSettings: 
           <h1>{T.planMin(minutesFor(left, d.sec_per_card))}</h1>
           {reviewOnlyChip}
         </div>
+        {/* 쉰 다음 날 복습 상한(v13 L2) */}
+        {d.plan.deferred ? <p className="small muted">쉰 다음 날이라 복습은 40장까지 · 나머지 {d.plan.deferred}장은 내일부터</p> : null}
         <ul className="td-steps" aria-label="단계">
           {c.review > 0 && (
             <li>

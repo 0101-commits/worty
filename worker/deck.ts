@@ -108,6 +108,12 @@ const DUE_MAX = 300;
 export function freshAllowance(newPerDay: number, backlog: number): number {
   return backlog > 200 ? 0 : backlog > 100 ? Math.floor(newPerDay / 2) : newPerDay;
 }
+/**
+ * 쉰 다음 날 몰림 덜기(v13 L2): 어제 공부를 안 했으면 오늘 복습은 이만큼까지(가장 잊어 가는 카드 먼저), 나머지는 내일 이후로.
+ * 마감일은 바꾸지 않고 오늘 목록에서만 뺀다. 복습이 상한을 넘는 날만 새 단어 0 — 하루 걸러 공부하는 흐름(11월 19일 중 10일)에서
+ * 「쉰 다음 날 = 늘 새 단어 0」이면 새 단어가 거의 안 들어온다(기획 L2 를 이렇게 좁힘).
+ */
+export const REST_DUE_CAP = 40;
 /** 「새 단어 더 받기」 한 번 · 하루 최대(D3) */
 export const EXTRA_STEP = 5;
 export const EXTRA_MAX = 20;
@@ -264,6 +270,8 @@ export interface TodayPlan {
   fresh_total: number;
   extra: number;
   extra_max: number;
+  /** 쉰 다음 날 복습 상한(v13 L2)으로 미룬 복습 수 */
+  deferred?: number;
 }
 
 /**
@@ -278,7 +286,7 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
   const dayEnd = studyDayStartUtc(addDays(date, 1));
   const plan = await ensurePlan(db, settings, date);
   const ids = JSON.stringify([...new Set(plan.fresh)]); // json_each 를 앞에 두면 같은 id 가 두 번일 때 행이 겹친다
-  const [newDone, reviewed, due, fresh, done, rated] = await db.batch([
+  const [newDone, reviewed, due, fresh, done, rated, prev] = await db.batch([
     db.prepare('SELECT count(*) AS n FROM cards WHERE introduced_at >= ?').bind(dayStart),
     // 오늘 채점 수 · 좋음/다시 = 덱 채점만. 연습에서 틀려 「다시」 된 줄(session_id practice)은 빼고 센다(검토 반영 2026-10-27)
     db.prepare(`SELECT count(*) AS n FROM reviews WHERE reviewed_at >= ? AND undone = 0 AND ${NOT_PRACTICE('session_id')}`).bind(dayStart),
@@ -312,6 +320,8 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
          WHERE reviewed_at >= ? AND undone = 0 AND ${NOT_PRACTICE('session_id')}`,
       )
       .bind(dayStart),
+    // 오늘 전 마지막 채점(쉰 다음 날인지, v13 L2)
+    db.prepare(`SELECT max(reviewed_at) AS t FROM reviews WHERE reviewed_at < ? AND undone = 0 AND ${NOT_PRACTICE('session_id')}`).bind(dayStart),
   ]);
   const new_done_today = (newDone.results[0] as { n: number }).n;
   const reviewed_today = (reviewed.results[0] as { n: number }).n;
@@ -322,7 +332,12 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
   // 오늘 처음 배워 아직 익히는 중(state 1)인 카드와 연습 오답(내일로 미룬 것)은 세지 않는다 — 새 단어를 할수록 몫이 줄지 않게
   const dueReviews = due.results.filter((r) => Number((r as { state?: number }).state) !== 1).length;
   const backlog = dueReviews + Math.max(0, Number((done.results[0] as { deck: number }).deck) - new_done_today);
-  const freshRoom = Math.max(0, freshAllowance(settings.new_per_day, backlog) + plan.extra - new_done_today);
+  // 쉰 다음 날(v13 L2): 어제 학습일에 채점이 없고 그 전에는 있었으면
+  const lastT = (prev.results[0] as { t: string | null } | undefined)?.t;
+  const afterRest = !!lastT && studyDay(new Date(lastT)) < addDays(date, -1);
+  const doneReviews = Math.max(0, Number((done.results[0] as { deck: number }).deck) - new_done_today);
+  const overCap = afterRest && dueReviews + doneReviews > REST_DUE_CAP;
+  const freshRoom = Math.max(0, (overCap ? 0 : freshAllowance(settings.new_per_day, backlog)) + plan.extra - new_done_today);
   const freshItems = reviewOnly
     ? []
     : fresh.results
@@ -330,11 +345,15 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
         .sort((a, b) => (order.get(a.word.id) ?? 0) - (order.get(b.word.id) ?? 0))
         .slice(0, freshRoom);
   // 기억률 낮은 순(가장 잊어 가는 카드 먼저). 같으면 마감이 이른 순(SQL 순서 유지)
-  const dueItems = due.results
+  const sorted = due.results
     .map((r) => rowToItem(r as Record<string, unknown>))
     .map((it, i) => ({ it, i, r: retrievability(it.card, now) }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
     .map((x) => x.it);
+  // 쉰 다음 날: 복습(익히는 중 state 1 은 빼고 셈 — 오늘 배운 카드의 다시 보기)은 상한까지만, 오늘 이미 한 복습도 셈에 넣음
+  let room = afterRest ? Math.max(0, REST_DUE_CAP - doneReviews) : Infinity;
+  const dueItems = sorted.filter((it) => it.card.state === 1 || room-- > 0);
+  const deferred = sorted.length - dueItems.length;
   // 끝낸 카드는 덱 채점만(연습에서 틀려 「다시」 된 카드는 오늘 몫이 아니었다 — 몫 전체가 부풀지 않게)
   const doneN = Number((done.results[0] as { deck: number }).deck) || 0;
   const r = rated.results[0] as { good: number; again: number };
@@ -351,6 +370,7 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
       fresh_total: reviewOnly ? 0 : Math.min(plan.fresh.length, freshRoom + new_done_today),
       extra: plan.extra,
       extra_max: EXTRA_MAX,
+      ...(deferred > 0 ? { deferred } : {}),
     },
     ratings: { good: Number(r.good) || 0, again: Number(r.again) || 0 },
   };

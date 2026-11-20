@@ -104,3 +104,51 @@ test('U3 장당 시간: 세션 시간 ÷ 본 카드 수, 3분 넘는 멈춤은 �
   assert.equal(minutesFor(20, 8), 3);
   assert.equal(minutesFor(20, null), 2); // 예전 셈(6초)
 });
+
+import { fakeD1, addWord, lem } from './d1.mjs';
+import { REST_DUE_CAP, buildToday, loadSettings } from '../worker/deck.ts';
+
+test('L2 쉰 다음 날: 복습은 40장까지(잊어 가는 카드 먼저) · 복습이 넘치면 새 단어 0 · 어제 공부했으면 그대로', async () => {
+  const NOON = new Date('2026-10-26T03:00:00Z'); // 학습일 10-26
+  const make = (dueN, lastReview) => {
+    const db = fakeD1();
+    for (let i = 1; i <= 6; i++) addWord(db, { id: `n${i}`, lemma: lem(i), seq: i });
+    for (let i = 1; i <= dueN; i++) addWord(db, { id: `r${i}`, lemma: `Alt${i}`, seq: 100 + i, state: 2, due: '2026-10-25T23:00:00.000Z', introduced_at: '2026-10-01T00:00:00.000Z' });
+    db.raw.prepare("UPDATE cards SET last_review = '2026-10-20T03:00:00.000Z', stability = 5 WHERE state = 2").run();
+    db.raw.prepare('INSERT INTO reviews(word_id, rating, reviewed_at) VALUES (?, 3, ?)').run('n1', lastReview);
+    return db;
+  };
+  const s = async (db) => ({ ...(await loadSettings(db)), new_per_day: 4 });
+  // 마지막 공부 10-24(어제 10-25 쉼) · 복습 60 → 40장 + 미룬 20 · 새 단어 0
+  let db = make(60, '2026-10-24T03:00:00.000Z');
+  let t = await buildToday(db, await s(db), NOON);
+  assert.equal(t.due.length, REST_DUE_CAP);
+  assert.equal(t.plan.deferred, 20);
+  assert.equal(t.fresh.length, 0);
+  // 쉰 다음 날이어도 복습이 상한 안이면 새 단어는 그대로
+  db = make(10, '2026-10-24T03:00:00.000Z');
+  t = await buildToday(db, await s(db), NOON);
+  assert.equal(t.due.length, 10);
+  assert.equal(t.plan.deferred, undefined);
+  assert.equal(t.fresh.length, 4);
+  // 어제(10-25 학습일) 공부했으면 상한 없음
+  db = make(60, '2026-10-25T03:00:00.000Z');
+  t = await buildToday(db, await s(db), NOON);
+  assert.equal(t.due.length, 60);
+  assert.equal(t.plan.deferred, undefined);
+});
+
+import { withGroups } from '../src/wordsFilter.ts';
+
+test('U5 · L5 단어 목록 묶음: 배우는 중 → 다음 30일 → 1년 안 → 그 뒤(거르기 중엔 없음)', () => {
+  const it = (i, learning) => ({ word: { id: `w${i}` }, card: { state: learning ? 2 : 0, introduced_at: learning ? 'x' : null } });
+  const items = [it(0, true), it(1, true), ...Array.from({ length: 400 }, (_, i) => it(2 + i, false))];
+  const heads = withGroups(items, true, { weak: 0, week: 0, learning: 2, new_per_day: 1 }).flatMap((x, i) => (x.head ? [[i, x.head]] : []));
+  assert.deepEqual(heads, [
+    [0, '배우는 중 2개'],
+    [2, '다음 30일에 배울 단어 30개'],
+    [32, '1년 안에 배울 단어 335개'],
+    [367, '그 뒤 · 지금 속도로 1년 넘게 걸리는 단어'],
+  ]);
+  assert.equal(withGroups(items, false, null).some((x) => x.head), false);
+});
