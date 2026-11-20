@@ -100,8 +100,12 @@ test('어려운 단어: 두 번 탈락 → 후보 · 한 번 그리면 빠짐 ·
   const cost = neuronEstimate(KLEIN9, cfg)
   near(hardSlot(l, day, cfg), cost)
   recordDraw(l, day, KLEIN9, cost)
-  assert.equal(hardSlot(l, day, cfg), null) // 하루 1개
-  assert.ok(hardSlot(l, day, ledgerConfig({ DAILY_HARD_MAX: '2' })) !== null)
+  assert.ok(hardSlot(l, day, cfg) !== null) // 기본 하루 3개(v13 G3)
+  recordDraw(l, day, KLEIN9, cost)
+  recordDraw(l, day, KLEIN9, cost)
+  assert.equal(hardSlot(l, day, cfg), null)
+  assert.equal(hardSlot(l, day, ledgerConfig({ DAILY_HARD_MAX: '1' })), null)
+  assert.ok(hardSlot(l, day, ledgerConfig({ DAILY_HARD_MAX: '4' })) !== null)
   // 뉴런이 모자라면 횟수가 남아도 막힘
   const poor = emptyLedger()
   recordDraw(poor, day, SCHNELL, 8500)

@@ -635,6 +635,14 @@ const runway: Handler = async ({ env, url }) => {
   // 그림 상한 2000: kaggle.mjs 가 검사 두 번 떨어진 단어(수백 개)를 건너뛰고도 250개를 고를 수 있게. 정렬 때문에 읽는 행 수는 상한과 거의 무관
   const image = clamp(intParam(url.searchParams.get('image'), 13), 0, 2000);
   const order = 'ORDER BY coalesce(c.state, 0) != 0 DESC, w.seq LIMIT ?';
+  // scope=learning(v13 D2 · 서버 그림 전용): 배우는 카드 + 아직 안 배운 카드 중 배울 순서 앞 ahead 개만(기본 150 = 하루 5개 × 30일)
+  const learning = url.searchParams.get('scope') === 'learning';
+  const ahead = clamp(intParam(url.searchParams.get('ahead'), 150), 0, 2000);
+  const inScope = learning
+    ? `AND w.id IN (SELECT word_id FROM cards WHERE NOT (state = 0 AND introduced_at IS NULL)
+         UNION ALL SELECT x.id FROM (SELECT w2.id FROM words w2 JOIN cards c2 ON c2.word_id = w2.id
+           WHERE c2.state = 0 AND c2.introduced_at IS NULL ORDER BY w2.seq LIMIT ${ahead}) x)`
+    : '';
   const [t, i] = await env.DB.batch([
     env.DB.prepare(
       `SELECT w.id, w.lemma, w.pos, w.gender, w.level, w.gloss_en FROM words w LEFT JOIN cards c ON c.word_id = w.id
@@ -642,7 +650,7 @@ const runway: Handler = async ({ env, url }) => {
     ).bind(text),
     env.DB.prepare(
       `SELECT w.id, w.lemma, w.pos, w.gender, w.level, w.scene_en FROM words w LEFT JOIN cards c ON c.word_id = w.id
-       WHERE w.image_status = 'none' AND w.scene_en IS NOT NULL ${order}`,
+       WHERE w.image_status = 'none' AND w.scene_en IS NOT NULL ${inScope} ${order}`,
     ).bind(image),
   ]);
   return json({ need_text: t.results, need_image: i.results } as RunwayResponse);

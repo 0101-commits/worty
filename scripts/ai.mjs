@@ -97,6 +97,15 @@ export async function askJson(prompt, { images = [], models = TEXT_MODELS, onUsa
 // 이미지는 한 번에 3장까지 → judge.mjs 에서 끊는다. 모델은 GROQ_MODEL 환경값으로 바꿀 수 있다.
 const GROQ_MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
 const GROQ_WAIT_MS = process.env.AI_RETRY_MS ? Number(process.env.AI_RETRY_MS) : 15_000;
+// v13 G4: Groq 요청 사이 최소 간격. 그림 판정이 분당 한도(429)에 하루 2~37번 걸렸다(11-07~11-19) — 몰아 보내지 않게 띄운다.
+// 시험(AI_RETRY_MS 설정)은 0. GROQ_GAP_MS 로 바꿈
+const GROQ_GAP_MS = process.env.GROQ_GAP_MS ? Number(process.env.GROQ_GAP_MS) : process.env.AI_RETRY_MS ? 0 : 12_000;
+let groqLast = 0;
+async function groqPace() {
+  const wait = groqLast + GROQ_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  groqLast = Date.now();
+}
 /** prompt → JSON 배열. images = [{label, png}]. 모델마다 세 번까지: 429 는 1분, 그 밖 5xx·끊김·깨진 JSON 은 15초 뒤 다시. */
 export async function askGroqJson(prompt, { images = [], model = GROQ_MODEL, onUsage } = {}) {
   const key = process.env.GROQ_API_KEY;
@@ -110,6 +119,7 @@ export async function askGroqJson(prompt, { images = [], model = GROQ_MODEL, onU
   let err;
   for (let attempt = 1; ; attempt++) {
     try {
+      await groqPace();
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },

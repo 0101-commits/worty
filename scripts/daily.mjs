@@ -251,7 +251,8 @@ try {
       const hardList = [];
       let hardScanned = 0;
       for (const id of hardCandidates(ledger, cfg)) {
-        if (hardList.length >= cfg.hardMax || hardScanned >= HARD_SCAN_MAX) break;
+        // 배우는 카드를 앞세우려고 hardMax 의 세 배까지 훑은 뒤 골라 자른다(아래)
+        if (hardList.length >= cfg.hardMax * 3 || hardScanned >= HARD_SCAN_MAX) break;
         if (pend.left.has(id) || ids.includes(id)) continue;
         hardScanned++;
         let d;
@@ -265,12 +266,17 @@ try {
           (log.hard_dropped ??= []).push(id);
           continue;
         }
-        hardList.push(id);
+        hardList.push({ id, learning: !(d.card.state === 0 && !d.card.introduced_at) });
       }
+      // v13 G3: 배우는 카드를 먼저(검사 두 번 떨어져 글 카드로 남은 배운 카드 90장)
+      hardList.sort((a, b) => Number(b.learning) - Number(a.learning));
+      hardList.splice(0, hardList.length, ...hardList.map((x) => x.id));
+      hardList.length = Math.min(hardList.length, cfg.hardMax);
       if (log.hard_dropped) console.log(`어려운 단어 목록에서 뺌(지워졌거나 그림 있음) ${log.hard_dropped.length}개: ${log.hard_dropped.join(',')}`);
       for (const id of hardList) hard.add(id);
       ids.unshift(...hardList.filter((id) => !pend.left.has(id) && !ids.includes(id)));
-      if (budget > ids.length) add((await api(`/api/admin/runway?text=0&image=${budget - ids.length + 5 + pend.left.size}`)).need_image.map((w) => w.id));
+      // 결정 D2(v13): 서버 그림은 배우는 카드 · 다음 30일(150개) 안 단어만 — 나머지는 Kaggle(그림의 90%)이 그린다
+      if (budget > ids.length) add((await api(`/api/admin/runway?text=0&scope=learning&ahead=150&image=${budget - ids.length + 5 + pend.left.size}`)).need_image.map((w) => w.id));
     }
     if (DRY) console.log(`[dry] 그릴 차례(다시 그리기 ${ids.filter((id) => redo.has(id)).length}): ${ids.join(',')}`);
     const need = [];

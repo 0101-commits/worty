@@ -63,7 +63,8 @@ export function ledgerConfig(env = process.env) {
     floor: num('MIX_FLOOR', 0.2),
     schnellSteps: num('SCHNELL_STEPS', 4),
     devSteps: num('DEV_STEPS', 20),
-    hardMax: num('DAILY_HARD_MAX', 1),
+    // v13 G3: 1 → 3. 서버 그림이 배우는 카드 전용(결정 D2)이 되며 남는 몫을 검사 두 번 떨어진 배우는 카드에(9b 한 장 ≈ 1,800 뉴런)
+    hardMax: num('DAILY_HARD_MAX', 3),
     hardModel: env.DAILY_HARD_MODEL === 'dev' || env.DAILY_HARD_MODEL === DEV ? DEV : KLEIN9, // 기본 9b, dev 는 환경값으로만
     hardFails: num('HARD_FAILS', 2),
     manual: !scheduled,
