@@ -140,7 +140,7 @@ function PlanCard({ d, onSettings, onChanged }: { d: TodayResponse; onSettings: 
     return (
       <Card className="td-plan" aria-label={T.plan}>
         <div className="td-head">
-          <h1>{T.planMin(minutesFor(left))}</h1>
+          <h1>{T.planMin(minutesFor(left, d.sec_per_card))}</h1>
           {reviewOnlyChip}
         </div>
         <ul className="td-steps" aria-label="단계">

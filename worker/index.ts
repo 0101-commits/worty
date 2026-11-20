@@ -19,7 +19,7 @@ import type {
   WordDetailResponse,
   WordsResponse,
 } from '../shared/api.ts';
-import { ITEM_SELECT, addExtra, buildToday, dropPlan, loadSettings, rowToItem } from './deck.ts';
+import { ITEM_SELECT, addExtra, buildToday, dropPlan, loadSettings, rowToItem, secPerCard } from './deck.ts';
 import { practiceItems, savePractice } from './practice.ts';
 import { applyRating } from './fsrs.ts';
 import { DAY_START_H, addDays, studyDay, studyDayStartUtc } from './time.ts';
@@ -73,8 +73,8 @@ const health: Handler = async () => json({ ok: true, time: new Date().toISOStrin
 
 const today: Handler = async ({ env }) => {
   const settings = await loadSettings(env.DB);
-  const t = await buildToday(env.DB, settings, new Date());
-  return json({ ...t, settings } satisfies TodayResponse);
+  const [t, sec] = await Promise.all([buildToday(env.DB, settings, new Date()), secPerCard(env.DB)]);
+  return json({ ...t, settings, sec_per_card: sec } satisfies TodayResponse);
 };
 
 /** 「새 단어 5개 더 받기」(D3) → 바뀐 오늘 몫. 하루 20개까지(넘으면 400 extra_max) */

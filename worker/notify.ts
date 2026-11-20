@@ -4,7 +4,7 @@ import type { DeckItem, Settings } from '../shared/api.ts';
 import { clozeOf } from '../shared/cloze.ts';
 import { eveningTitle, morningTitle, quiet, restOf, seedOf } from '../shared/copy.ts';
 import type { Rest } from '../shared/copy.ts';
-import { buildToday, loadSettings } from './deck.ts';
+import { buildToday, loadSettings, secPerCard } from './deck.ts';
 import { DAY_START_H, monthDay, studyDay } from './time.ts';
 import { dayOf } from './db.ts';
 import { eveningPayload, hasStats, minutesFor, morningPayload, send, summarize, testPayload } from './discord.ts';
@@ -196,7 +196,8 @@ export async function runEvening(
   if (quiet('evening', rest.rest, day)) return { skipped: 'quiet' };
   const title = eveningTitle({ n: remaining, rest: rest.rest, studiedToday: reviewedToday > 0, seed: seedOf(day) });
   if (opts.dry) return { dry: { kind, n: remaining, title } };
-  return dispatch(env, kind, day, (n) => eveningPayload({ remaining, minutes: minutesFor(remaining), appUrl: env.APP_URL, n, title }), now, settings.discord_on);
+  const sec = await secPerCard(env.DB, now);
+  return dispatch(env, kind, day, (n) => eveningPayload({ remaining, minutes: minutesFor(remaining, sec), appUrl: env.APP_URL, n, title }), now, settings.discord_on);
 }
 
 /** 「1시간 뒤」 를 받을 수 있는지: 그날(학습일) 저녁 통이고, 미룬 통이 아직 없고, 1시간 뒤가 23:30 KST 를 넘지 않을 때 */

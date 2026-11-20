@@ -355,3 +355,36 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
     ratings: { good: Number(r.good) || 0, again: Number(r.again) || 0 },
   };
 }
+
+/**
+ * 장당 걸린 초(v13 U3): 채점을 세션으로 묶어(3분 넘게 멈추면 새 세션) 세션 시간 합 ÷ 본 카드 수(같은 카드 다시 보기는 하나).
+ * 예전엔 한 장 = 6초로 셈했다. 11-06~11-20 실측 = 세션 7번 · 장당 8초(다시 보기 · 소개 카드 · 퀴즈 포함).
+ * 짝 맞추기처럼 한꺼번에 채점되는 단계가 있어 채점 사이 간격 가운데값(4.5초)은 짧게 나온다 — 그래서 세션 단위로 잰다.
+ * 본 카드가 20장 못 되면 null(부르는 쪽이 6초로).
+ */
+export function paceOf(rows: Array<{ t: number; w: string }>): number | null {
+  let dur = 0;
+  let cards = 0;
+  let start = 0;
+  for (let i = 0; i <= rows.length; i++) {
+    if (i === rows.length || (i > start && rows[i].t - rows[i - 1].t > 180_000)) {
+      if (i > start) {
+        dur += (rows[i - 1].t - rows[start].t) / 1000;
+        cards += new Set(rows.slice(start, i).map((r) => r.w)).size;
+      }
+      start = i;
+    }
+  }
+  if (cards < 20 || dur <= 0) return null;
+  return Math.round((dur / cards) * 10) / 10;
+}
+
+/** 최근 14일 채점으로 장당 초(paceOf) */
+export async function secPerCard(db: D1Database, now: Date = new Date()): Promise<number | null> {
+  const since = new Date(now.getTime() - 14 * 86_400_000).toISOString();
+  const { results } = await db
+    .prepare('SELECT reviewed_at, word_id FROM reviews WHERE undone = 0 AND reviewed_at >= ? ORDER BY reviewed_at')
+    .bind(since)
+    .all<{ reviewed_at: string; word_id: string }>();
+  return paceOf(results.map((r) => ({ t: Date.parse(r.reviewed_at), w: r.word_id })).filter((r) => !Number.isNaN(r.t)));
+}

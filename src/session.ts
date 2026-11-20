@@ -189,5 +189,5 @@ export function sinceLabel(card: Card, now: Date = new Date()): { text: string; 
   return { text: T.sinceDays(d), tone: d >= 7 ? 'again' : 'plain' }
 }
 
-/** 한 장 ≈ 6초(알림 「약 N분」과 같은 셈 — worker/discord.ts minutesFor) */
-export const minutesFor = (n: number) => Math.max(1, Math.ceil((n * 6) / 60))
+/** 남은 장 → 예상 분. sec = 내 장당 초(서버가 최근 채점 간격으로 잼, v13 U3) · 없으면 6초(worker/discord.ts minutesFor 와 같은 셈) */
+export const minutesFor = (n: number, sec?: number | null) => Math.max(1, Math.ceil((n * (sec || 6)) / 60))

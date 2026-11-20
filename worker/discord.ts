@@ -119,9 +119,9 @@ export function morningPayload(p: {
   ]);
 }
 
-/** 남은 카드 수 → 예상 분(카드당 6초, 최소 1분) */
-export function minutesFor(remaining: number): number {
-  return Math.max(1, Math.ceil((remaining * 6) / 60));
+/** 남은 카드 수 → 예상 분(최소 1분). sec = 장당 초(v13 U3 deck.ts secPerCard), 없으면 6초 */
+export function minutesFor(remaining: number, sec?: number | null): number {
+  return Math.max(1, Math.ceil((remaining * (sec || 6)) / 60));
 }
 
 export function eveningPayload(p: { remaining: number; minutes: number; appUrl: string; n?: number; title?: string }): Payload {

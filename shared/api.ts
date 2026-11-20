@@ -100,6 +100,8 @@ export interface TodayResponse {
   /** 오늘 채점 수: good = O(어려움·좋음·쉬움) / again = X(다시). v11 부터 어려움 = 늦게 맞힘 */
   ratings: { good: number; again: number };
   settings: Settings;
+  /** 장당 걸린 초(v13 U3, 최근 14일 채점 간격 가운데값). 자료가 적으면 null → 6초로 셈 */
+  sec_per_card?: number | null;
 }
 
 /** POST /api/reviews */

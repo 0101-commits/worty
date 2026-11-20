@@ -89,3 +89,18 @@ test('L4 합성어 풀이: 이어 붙여 표제어와 같은 답만 받는다', 
   assert.equal(got.has('w4'), false);
   assert.equal(got.has('w5'), false);
 });
+
+import { paceOf } from '../worker/deck.ts';
+import { minutesFor } from '../src/session.ts';
+
+test('U3 장당 시간: 세션 시간 ÷ 본 카드 수, 3분 넘는 멈춤은 세션 경계', () => {
+  const rows = [];
+  // 세션 1: 카드 20장을 10초 간격(같은 카드 한 번 다시) → 200초 · 20장
+  for (let i = 0; i <= 20; i++) rows.push({ t: i * 10_000, w: `w${i % 20}` });
+  // 1시간 쉼 뒤 세션 2: 10장 5초 간격 → 45초 · 10장
+  for (let i = 0; i < 10; i++) rows.push({ t: 3_600_000 + i * 5000, w: `x${i}` });
+  assert.equal(paceOf(rows), Math.round((245 / 30) * 10) / 10);
+  assert.equal(paceOf(rows.slice(0, 5)), null); // 자료가 적으면 null
+  assert.equal(minutesFor(20, 8), 3);
+  assert.equal(minutesFor(20, null), 2); // 예전 셈(6초)
+});
