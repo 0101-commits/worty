@@ -110,8 +110,8 @@ export function freshAllowance(newPerDay: number, backlog: number): number {
 }
 /**
  * 쉰 다음 날 몰림 덜기(v13 L2): 어제 공부를 안 했으면 오늘 복습은 이만큼까지(가장 잊어 가는 카드 먼저), 나머지는 내일 이후로.
- * 마감일은 바꾸지 않고 오늘 목록에서만 뺀다. 복습이 상한을 넘는 날만 새 단어 0 — 하루 걸러 공부하는 흐름(11월 19일 중 10일)에서
- * 「쉰 다음 날 = 늘 새 단어 0」이면 새 단어가 거의 안 들어온다(기획 L2 를 이렇게 좁힘).
+ * 마감일은 바꾸지 않고 오늘 목록에서만 뺀다. 복습이 상한을 넘는 날만 새 단어 0 — 하루 걸러 공부하면
+ * 「쉰 다음 날 = 늘 새 단어 0」으로는 새 단어가 거의 안 들어온다(기획 L2 를 이렇게 좁힘).
  */
 export const REST_DUE_CAP = 40;
 /** 「새 단어 더 받기」 한 번 · 하루 최대(D3) */
@@ -350,9 +350,11 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
     .map((it, i) => ({ it, i, r: retrievability(it.card, now) }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
     .map((x) => x.it);
-  // 쉰 다음 날: 복습(익히는 중 state 1 은 빼고 셈 — 오늘 배운 카드의 다시 보기)은 상한까지만, 오늘 이미 한 복습도 셈에 넣음
-  let room = afterRest ? Math.max(0, REST_DUE_CAP - doneReviews) : Infinity;
-  const dueItems = sorted.filter((it) => it.card.state === 1 || room-- > 0);
+  // 쉰 다음 날: 복습은 상한까지만. 익히는 중(state 1 — 오늘 배운 카드의 다시 보기)과 오늘 이미 채점한 카드(틀려서 다시 볼 카드)는
+  // 늘 남기고 상한에 셈 — 틀린 카드는 기억률이 높게 나와 줄 맨 뒤라, 안 그러면 미룬 카드가 그 자리를 차지한다
+  const gradedToday = (it: DeckItem) => it.card.state !== 1 && !!it.card.last_review && it.card.last_review >= dayStart;
+  let room = afterRest ? Math.max(0, REST_DUE_CAP - doneReviews - sorted.filter(gradedToday).length) : Infinity;
+  const dueItems = sorted.filter((it) => it.card.state === 1 || gradedToday(it) || room-- > 0);
   const deferred = sorted.length - dueItems.length;
   // 끝낸 카드는 덱 채점만(연습에서 틀려 「다시」 된 카드는 오늘 몫이 아니었다 — 몫 전체가 부풀지 않게)
   const doneN = Number((done.results[0] as { deck: number }).deck) || 0;
@@ -378,8 +380,8 @@ export async function buildToday(db: D1Database, settings: Settings, now: Date =
 
 /**
  * 장당 걸린 초(v13 U3): 채점을 세션으로 묶어(3분 넘게 멈추면 새 세션) 세션 시간 합 ÷ 본 카드 수(같은 카드 다시 보기는 하나).
- * 예전엔 한 장 = 6초로 셈했다. 11-06~11-20 실측 = 세션 7번 · 장당 8초(다시 보기 · 소개 카드 · 퀴즈 포함).
- * 짝 맞추기처럼 한꺼번에 채점되는 단계가 있어 채점 사이 간격 가운데값(4.5초)은 짧게 나온다 — 그래서 세션 단위로 잰다.
+ * 예전엔 한 장 = 6초로 셈했다(다시 보기 · 소개 카드 · 퀴즈가 섞이면 더 걸린다).
+ * 짝 맞추기처럼 한꺼번에 채점되는 단계가 있어 채점 사이 간격 가운데값은 짧게 나온다 — 그래서 세션 단위로 잰다.
  * 본 카드가 20장 못 되면 null(부르는 쪽이 6초로).
  */
 export function paceOf(rows: Array<{ t: number; w: string }>): number | null {

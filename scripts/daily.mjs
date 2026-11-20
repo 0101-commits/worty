@@ -250,7 +250,12 @@ try {
       // 빼지 않으면 날마다 같은 맨 앞 단어에서 몫이 사라진다(11-09~11-15 w0009 에 막혀 큰 모델 0장)
       const hardList = [];
       let hardScanned = 0;
-      for (const id of hardCandidates(ledger, cfg)) {
+      // v13 G3: 배우는 카드 중 그림 실패(글 카드)로 남은 단어도 큰 모델 후보로 — 장부(fails)에 없는 옛 실패가 많다(76장).
+      // 큰 모델로 한 번 그린 단어(hard_tried)는 빼서 날마다 같은 단어에 몫이 가지 않게
+      const failedLearning = (await api('/api/admin/runway?text=0&scope=learning&status=failed&image=60').catch(() => ({ need_image: [] }))).need_image
+        .map((w) => w.id)
+        .filter((id) => !ledger.hard_tried[id]);
+      for (const id of [...new Set([...failedLearning, ...hardCandidates(ledger, cfg)])]) {
         // 배우는 카드를 앞세우려고 hardMax 의 세 배까지 훑은 뒤 골라 자른다(아래)
         if (hardList.length >= cfg.hardMax * 3 || hardScanned >= HARD_SCAN_MAX) break;
         if (pend.left.has(id) || ids.includes(id)) continue;
@@ -595,7 +600,8 @@ try {
     console.log(`검사 대기 ${pendingTotal}장(이번에 맡김 ${log.pending.sent} · 대기에서 올림 ${log.pending.uploaded} · 탈락 ${log.pending.rejected} · 정리 ${log.pending.dropped})`);
     const uploadedToday = log.images.length + log.pending.uploaded;
     const blocked = log.pending.sent > 0 || (judgeDown && pendingTotal > 0);
-    if (!DRY && (blocked || (checked > 0 && uploadedToday === 0))) {
+    // 결정 D2(v13) 뒤 서버는 하루 몇 장(배우는 카드 · 어려운 단어)만 그려 0장인 날이 흔하다 → 6번 넘게 그리고도 0장일 때만
+    if (!DRY && (blocked || (checked >= 6 && uploadedToday === 0))) {
       const head = `대기 ${pendingTotal}장 · 오늘 올림 ${uploadedToday}장`;
       await notify('error', blocked ? 'Wortling 그림 검사 막힘' : 'Wortling 오늘 올린 그림 0장', blocked ? `${head} · 다음 실행에서 먼저 검사` : `${head} · 그린 ${checked}번 모두 검사 탈락·실패(Actions 의 rejected 그림 확인)`);
     }

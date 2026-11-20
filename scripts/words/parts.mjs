@@ -10,7 +10,7 @@ const DRY = process.argv.includes('--dry');
 const MAX = Number((process.argv.find((a) => a.startsWith('--max=')) || '').slice(6)) || 250;
 const BATCH = 25;
 
-const log = { day: kstDay(), dry: DRY, waiting: 0, asked: 0, compound: 0, none: 0, skipped: 0, failedBatches: 0, quotaOut: false, errors: [] };
+const log = { day: kstDay(), dry: DRY, waiting: 0, asked: 0, compound: 0, none: 0, rejected: 0, skipped: 0, failedBatches: 0, quotaOut: false, errors: [] };
 const sample = [];
 
 try {
@@ -22,7 +22,12 @@ try {
     const batch = items.slice(i, i + BATCH);
     let got;
     try {
-      got = acceptParts(await askJson(partsPrompt(batch)), batch);
+      const ans = await askJson(partsPrompt(batch));
+      got = acceptParts(ans, batch);
+      // 답은 왔는데 검사에서 떨어진 낱말은 [](합성어 풀이 없음)로 적는다 — NULL 로 두면 다음 날 같은 자리에 다시 와
+      // 대기열 앞을 막는다(묶음마다 0개 → 「3묶음 연속」으로 날마다 멈춤). 카드는 음절 끊기로 충분하다
+      const answered = new Set((Array.isArray(ans) ? ans : []).map((o) => o?.id));
+      for (const w of batch) if (answered.has(w.id) && !got.has(w.id)) (got.set(w.id, []), log.rejected++);
     } catch (e) {
       // 하루 몫 소진은 정상 흐름(카드 검토 · 예문 낱말이 같은 몫을 먼저 쓴다) — 남은 것은 내일
       if (/PerDay|quota/i.test(String(e.message))) {

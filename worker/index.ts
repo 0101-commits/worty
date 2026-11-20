@@ -638,6 +638,8 @@ const runway: Handler = async ({ env, url }) => {
   // scope=learning(v13 D2 · 서버 그림 전용): 배우는 카드 + 아직 안 배운 카드 중 배울 순서 앞 ahead 개만(기본 150 = 하루 5개 × 30일)
   const learning = url.searchParams.get('scope') === 'learning';
   const ahead = clamp(intParam(url.searchParams.get('ahead'), 150), 0, 2000);
+  // status=failed(v13 G3): 그림이 검사에서 거듭 떨어져 글 카드로 남은 단어 — 서버의 큰 모델이 배우는 카드부터 다시 그림
+  const failed = url.searchParams.get('status') === 'failed';
   const inScope = learning
     ? `AND w.id IN (SELECT word_id FROM cards WHERE NOT (state = 0 AND introduced_at IS NULL)
          UNION ALL SELECT x.id FROM (SELECT w2.id FROM words w2 JOIN cards c2 ON c2.word_id = w2.id
@@ -650,7 +652,7 @@ const runway: Handler = async ({ env, url }) => {
     ).bind(text),
     env.DB.prepare(
       `SELECT w.id, w.lemma, w.pos, w.gender, w.level, w.scene_en FROM words w LEFT JOIN cards c ON c.word_id = w.id
-       WHERE w.image_status = 'none' AND w.scene_en IS NOT NULL ${inScope} ${order}`,
+       WHERE w.image_status = ${failed ? "'failed'" : "'none'"} AND w.scene_en IS NOT NULL ${inScope} ${order}`,
     ).bind(image),
   ]);
   return json({ need_text: t.results, need_image: i.results } as RunwayResponse);

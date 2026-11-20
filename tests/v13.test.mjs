@@ -152,3 +152,24 @@ test('U5 · L5 단어 목록 묶음: 배우는 중 → 다음 30일 → 1년 안
   ]);
   assert.equal(withGroups(items, false, null).some((x) => x.head), false);
 });
+
+test('L2 쉰 다음 날: 오늘 틀린 카드는 미룬 카드에 밀려나지 않고, 오늘 본 복습 카드는 40장을 넘지 않는다', async () => {
+  const NOON = new Date('2026-10-26T03:00:00Z');
+  const db = fakeD1();
+  for (let i = 1; i <= 60; i++) addWord(db, { id: `r${i}`, lemma: `Alt${i}`, seq: 100 + i, state: 2, due: '2026-10-25T23:00:00.000Z', introduced_at: '2026-10-01T00:00:00.000Z' });
+  db.raw.prepare("UPDATE cards SET last_review = '2026-10-20T03:00:00.000Z', stability = 5").run();
+  db.raw.prepare("INSERT INTO reviews(word_id, rating, reviewed_at) VALUES ('r1', 3, '2026-10-24T03:00:00.000Z')").run(); // 10-25 쉼
+  const at = '2026-10-26T01:00:00.000Z';
+  // 오늘 30장 O(다음 볼 때 먼 날) · 5장 X(오늘 다시 — 다시 익히는 중 state 3, 마감 몇 분 뒤)
+  for (let i = 1; i <= 35; i++) {
+    const x = i > 30;
+    db.raw.prepare('UPDATE cards SET state = ?, due = ?, last_review = ?, stability = ? WHERE word_id = ?')
+      .run(x ? 3 : 2, x ? '2026-10-26T01:10:00.000Z' : '2026-11-20T00:00:00.000Z', at, x ? 0.5 : 20, `r${i}`);
+    db.raw.prepare('INSERT INTO reviews(word_id, rating, reviewed_at) VALUES (?, ?, ?)').run(`r${i}`, x ? 1 : 3, at);
+  }
+  const t = await buildToday(db, { ...(await loadSettings(db)), new_per_day: 4 }, NOON);
+  const ids = t.due.map((i) => i.word.id);
+  for (let i = 31; i <= 35; i++) assert.ok(ids.includes(`r${i}`), `틀린 r${i} 가 남아야 함`);
+  assert.equal(t.plan.done + t.due.length, REST_DUE_CAP); // 30 끝냄 + 5 틀림 + 5 새로 = 40
+  assert.equal(t.plan.deferred, 20);
+});

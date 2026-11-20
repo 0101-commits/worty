@@ -285,14 +285,14 @@ export async function exampleWords(db: D1Database) {
 // ---------- 합성어 풀이(v13 L4) ----------
 
 /**
- * 풀이를 아직 안 물어본 긴 낱말(10자 넘는 덩어리) — 배우는 카드 먼저, 그다음 아주 긴 것(16자+), 그다음 배울 순서.
+ * 풀이를 아직 안 물어본 긴 낱말(10자 넘는 한 낱말 — 숙어 · 하이픈 낱말은 빼고, 음절 끊기로 충분) — 배우는 카드 먼저, 그다음 아주 긴 것(16자+), 그다음 배울 순서.
  * scripts/words/parts.mjs 가 하루 몇백 개씩 AI 에 묻는다.
  */
 export async function partsQueue(db: D1Database, limit: number) {
   const r = await db
     .prepare(
       `SELECT w.id, w.lemma, w.pos, w.gloss_ko FROM words w JOIN cards c ON c.word_id = w.id
-       WHERE w.parts IS NULL AND length(w.lemma) >= 10
+       WHERE w.parts IS NULL AND length(w.lemma) >= 10 AND w.lemma NOT LIKE '% %' AND w.lemma NOT LIKE '%-%'
        ORDER BY (c.state = 0 AND c.introduced_at IS NULL), (length(w.lemma) < 16), w.seq LIMIT ?`,
     )
     .bind(Math.min(Math.max(1, limit), 1000))
