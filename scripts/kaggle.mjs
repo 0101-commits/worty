@@ -320,7 +320,13 @@ else if (cmd === 'calibrate') await calibrate(a, b || path.join(ROOT, 'kaggle', 
 else if (cmd === 'report') report(a);
 else if (cmd === 'revert') await revert(a);
 else if (cmd === 'apply') applyOps();
+else if (cmd === 'drop') {
+  // 거두기 실패: 맡김 목록을 비워 그 단어를 다음 묶음에서 다시 뽑게 한다(scripts/kaggle-collect.sh)
+  const ids = Object.keys(readJson(QUEUE_FILE, {}));
+  saveOps({ ...emptyOps(), queueRemove: ids });
+  console.log(`맡김 목록 비움 ${ids.length}`);
+}
 else {
-  console.error('사용: node scripts/kaggle.mjs pick <n> <빌드폴더> | collect <결과폴더> | calibrate <ids> <빌드폴더> | report <결과폴더> | revert <ids> | apply');
+  console.error('사용: node scripts/kaggle.mjs pick <n> <빌드폴더> | collect <결과폴더> | calibrate <ids> <빌드폴더> | report <결과폴더> | revert <ids> | apply | drop');
   process.exit(1);
 }

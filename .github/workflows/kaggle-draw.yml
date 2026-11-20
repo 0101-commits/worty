@@ -1,22 +1,29 @@
 # Kaggle 무료 GPU(주 ≈30시간)로 그림을 한꺼번에 그린다(기획 G4). 같은 모델 계열(FLUX.2 klein 4B)·같은 프롬프트(style.mjs),
 # 검사는 같은 GPU 의 열린 비전 모델(Qwen2.5-VL, 엄격 2단계) → 자동 검사(imgcheck.mjs) 통과분만 올린다. 매일 03:23 KST(18:23Z) 250장(10-30 사용자 결정) — 앱이 응답 못 하면(D1 한도 등) 그날은 건너뜀.
 # 비밀값: KAGGLE_API_KEY(옛 키 또는 KGAT_… 토큰) · APP_URL · API_TOKEN / 변수: KAGGLE_USERNAME
-#   mode = push(커널만 보냄) · collect(끝난 커널 결과 거두기) · both(보내고 기다렸다 거둠, 5시간 넘으면 멈추고 collect 로)
+#   mode = auto(매일 03:23 예약: 안 거둔 결과 먼저 거두고 → 새 커널 보냄, 기다리지 않음)
+#        · collect(끝난 커널 결과 거두기 — 낮 예약 3번이 상태만 보고 끝났으면 거둠, 아직 돌면 그냥 끝)
+#        · push(커널만 보냄) · both(손으로: 보내고 기다렸다 거둠, 5시간 넘으면 멈추고 collect 로)
+#   2026-11-20 v13 G1: 11-19 깃허브 서버가 3시간 39분 기다리다 연결이 끊겨 그날 묶음을 못 거뒀고 알림도 없었다
+#   → 예약 실행은 기다리지 않고(보내기 · 거두기 따로), 실패하면 alert 작업이 새 서버에서 디스코드로 한 줄.
 #        · calibrate(ids 의 올라간 그림을 엄격 검사에만 돌려 판정 확인, 올리기 없음) · revert(ids 를 검사 탈락처럼 되돌림, GPU 없음)
 name: kaggle-draw
 
 on:
   schedule:
-    - cron: '23 18 * * *' # 한국 03:23 · 정각은 깃허브 대기열이 붐빈다
+    - cron: '23 18 * * *' # 한국 03:23 보내기(auto) · 정각은 깃허브 대기열이 붐빈다 · 실제 시작은 4~7시간 늦곤 함
+    - cron: '50 3 * * *' # 한국 12:50 거두기(collect) — 끝났을 때만
+    - cron: '50 7 * * *' # 한국 16:50 거두기
+    - cron: '50 11 * * *' # 한국 20:50 거두기
   workflow_dispatch:
     inputs:
       n:
         description: '그릴 단어 수'
         default: '10'
       mode:
-        description: 'both | push | collect | calibrate | revert'
+        description: 'both | auto | push | collect | calibrate | revert'
         type: choice
-        options: [both, push, collect, calibrate, revert]
+        options: [both, auto, push, collect, calibrate, revert]
         default: both
       ids:
         description: 'calibrate · revert 에 쓸 단어 id(쉼표)'
@@ -32,7 +39,8 @@ permissions:
 jobs:
   kaggle:
     runs-on: windows-latest # 그림 글자 검사가 Windows OCR(scripts/winocr.ps1)
-    timeout-minutes: 330
+    # 예약 실행은 기다리지 않아 30분 안에 끝남. 손으로 both · calibrate 를 돌릴 때만 길게 기다린다
+    timeout-minutes: ${{ (inputs.mode == 'both' || inputs.mode == 'calibrate') && 330 || 60 }}
     defaults:
       run:
         shell: bash
@@ -45,8 +53,8 @@ jobs:
       KAGGLE_SECRET: ${{ secrets.KAGGLE_API_KEY }}
       IDS: ${{ inputs.ids }}
       N: ${{ inputs.n || '250' }}
-      # cron 실행엔 inputs 가 비어 있다 — 아래 if 는 inputs.mode 대신 env.MODE
-      MODE: ${{ inputs.mode || 'both' }}
+      # cron 실행엔 inputs 가 비어 있다 — 아래 if 는 inputs.mode 대신 env.MODE. 03:23 예약 = auto, 낮 예약 = collect
+      MODE: ${{ inputs.mode || (github.event.schedule == '23 18 * * *' && 'auto' || 'collect') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -80,9 +88,30 @@ jobs:
         run: |
           node scripts/kaggle.mjs revert "$IDS"
           bash scripts/kaggle-commit.sh '검사 탈락 되돌림'
+      # auto · collect: 지난 커널 상태만 보고 할 일을 정한다(기다리지 않음)
+      - name: 지난 커널 상태
+        id: st
+        if: env.MODE == 'auto' || env.MODE == 'collect'
+        run: |
+          out=$(kaggle kernels status "${KAGGLE_USERNAME}/worty-draw" 2>&1 || true)
+          queue=$(node -e "try{console.log(Object.keys(JSON.parse(require('fs').readFileSync('.data/kaggle-queue.json','utf8'))).length)}catch{console.log(0)}")
+          case "$out" in
+            *COMPLETE*) state=complete ;;
+            *ERROR*|*CANCEL*) state=error ;;
+            *RUNNING*|*QUEUED*) state=running ;;
+            *) state=none ;;
+          esac
+          echo "커널 $state · 안 거둔 단어 $queue · $out"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "queue=$queue" >> "$GITHUB_OUTPUT"
+      - name: 끝난 결과 먼저 거두기
+        id: col
+        if: (env.MODE == 'auto' || env.MODE == 'collect') && steps.st.outputs.queue != '0' && (steps.st.outputs.state == 'complete' || steps.st.outputs.state == 'error')
+        run: bash scripts/kaggle-collect.sh "${{ steps.st.outputs.state }}"
       - name: 단어 고르기·커널 만들기
         id: pick
-        if: env.MODE == 'both' || env.MODE == 'push'
+        # auto 는 지난 커널이 아직 돌면 새로 보내지 않는다(같은 커널 이름이라 덮어씀). 거두기가 실패해도 새 묶음은 보낸다
+        if: always() && !cancelled() && (env.MODE == 'both' || env.MODE == 'push' || (env.MODE == 'auto' && steps.st.outcome == 'success' && steps.st.outputs.state != 'running'))
         run: |
           # 앱이 D1 을 못 읽으면(무료 한도 초과 503 등) 그린 그림을 올릴 수 없다 — GPU 시간을 쓰지 않고 건너뜀
           code=$(curl -s -o /dev/null -w "%{http_code}" -H "authorization: Bearer $API_TOKEN" "${APP_URL%/}/api/admin/keys" || true)
@@ -93,14 +122,14 @@ jobs:
         if: env.MODE == 'calibrate'
         run: node scripts/kaggle.mjs calibrate "$IDS" kaggle/build
       - name: 커널 보내기
-        if: (env.MODE == 'both' || env.MODE == 'push') && steps.pick.outputs.count != '0' || env.MODE == 'calibrate'
+        if: always() && steps.pick.outcome == 'success' && steps.pick.outputs.count != '0' || env.MODE == 'calibrate'
         run: kaggle kernels push -p kaggle/build
       - name: 맡김 목록 되올리기
-        if: (env.MODE == 'both' || env.MODE == 'push') && steps.pick.outputs.count != '0'
+        if: always() && steps.pick.outcome == 'success' && steps.pick.outputs.count != '0'
         run: bash scripts/kaggle-commit.sh '맡김 목록 갱신'
       - name: 커널 끝나길 기다리기
         id: wait
-        if: env.MODE == 'collect' || env.MODE == 'calibrate' || (env.MODE == 'both' && steps.pick.outputs.count != '0')
+        if: env.MODE == 'calibrate' || (env.MODE == 'both' && steps.pick.outputs.count != '0')
         run: |
           kernel="${KAGGLE_USERNAME}/worty-draw"
           deadline=$(( $(date +%s) + 5*3600 + 15*60 ))
@@ -135,7 +164,7 @@ jobs:
         if: env.MODE != 'calibrate' && steps.out.outcome == 'success'
         run: node scripts/kaggle.mjs collect kaggle/result
       - name: 탈락 그림 보관
-        if: always() && env.MODE != 'calibrate' && steps.out.outcome == 'success'
+        if: always() && env.MODE != 'calibrate' && (steps.out.outcome == 'success' || steps.col.outcome != 'skipped')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kaggle-rejected-${{ github.run_id }}
@@ -146,3 +175,22 @@ jobs:
       - name: 장부 되올리기
         if: env.MODE != 'calibrate' && steps.out.outcome == 'success'
         run: bash scripts/kaggle-commit.sh '장부 갱신'
+
+  # 실행이 실패하면(커널 실패 · 거두기 실패 · 깃허브 서버 연결 끊김 포함) 새 서버에서 디스코드로 한 줄.
+  # 같은 작업 안의 if: failure() 단계는 서버가 끊기면 못 돈다 — 그래서 따로 둔다. 실행 기록이 공개라 주소·본문은 찍지 않음
+  alert:
+    needs: kaggle
+    if: always() && needs.kaggle.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 디스코드 알림
+        env:
+          HOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MODE: ${{ inputs.mode || (github.event.schedule == '23 18 * * *' && 'auto' || 'collect') }}
+        run: |
+          [ -n "$HOOK" ] || { echo "웹후크 없음 — 못 보냄"; exit 0; }
+          body=$(node -e "console.log(JSON.stringify({content: '**Wortling Kaggle 그림 실패** (' + process.env.MODE + ')\n' + process.env.RUN, allowed_mentions: {parse: []}}))")
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' -d "$body" "$HOOK" || echo 000)
+          echo "디스코드 알림 $code"
