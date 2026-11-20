@@ -1,5 +1,5 @@
 // 오늘 카드 고르기. GET /api/today 와 아침 알림(cron)이 같은 함수를 쓴다.
-import type { CardState, DeckItem, Level, Pos, Settings } from '../shared/api.ts';
+import type { CardState, DeckItem, Level, Pos, Settings, WordPart } from '../shared/api.ts';
 import { addDays, studyDay, studyDayStartUtc } from './time.ts';
 import { bad } from './http.ts';
 import { retrievability } from './fsrs.ts';
@@ -8,9 +8,20 @@ import { crossJoin, jsonEach } from './db.ts';
 
 /** words w JOIN cards c 에서 DeckItem 을 만들 때 고르는 열(열 이름이 겹치지 않게 w.id / c.word_id) */
 export const ITEM_SELECT = `w.id, w.lemma, w.pos, w.gender, w.plural, w.ipa, w.level, w.gloss_en, w.gloss_ko,
-  w.example_de, w.example_ko, w.example_hit, w.image_status, w.seq,
+  w.example_de, w.example_ko, w.example_hit, w.image_status, w.seq, w.parts,
   c.word_id, c.state, c.due, c.stability, c.difficulty, c.elapsed_days, c.scheduled_days,
   c.learning_steps, c.reps, c.lapses, c.last_review, c.introduced_at, c.suspended`;
+
+/** 합성어 풀이 칸(JSON) → 조각 배열. 비었거나('[]') 꼴이 이상하면 null */
+export function parseParts(v: unknown): WordPart[] | null {
+  if (typeof v !== 'string' || v.length < 3) return null;
+  try {
+    const a = JSON.parse(v);
+    return Array.isArray(a) && a.length >= 2 && a.every((x) => x && typeof x.p === 'string') ? (a as WordPart[]) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function rowToItem(r: Record<string, unknown>): DeckItem {
   const s = (k: string) => (r[k] == null ? null : String(r[k]));
@@ -31,6 +42,7 @@ export function rowToItem(r: Record<string, unknown>): DeckItem {
       example_hit: s('example_hit'),
       image: r.image_status === 'ok',
       seq: n('seq'),
+      parts: parseParts(r.parts),
     },
     card: {
       word_id: String(r.word_id),

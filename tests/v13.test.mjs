@@ -62,3 +62,30 @@ test('U1 끊는 자리: 합성어 풀이가 있으면 그 경계(이음 s 는 �
   assert.equal(show(hyphenate('den Nagel auf den Kopf treffen')), 'den Nagel auf den Kopf treffen');
   assert.deepEqual(pieces(hyphenate('Geschwindigkeitsbeschränkung', parts, 'parts')), ['Geschwindigkeits', 'beschränkung']);
 });
+
+import { acceptParts } from '../scripts/words/lib.mjs';
+
+test('L4 합성어 풀이: 이어 붙여 표제어와 같은 답만 받는다', () => {
+  const list = [
+    { id: 'w1', lemma: 'Geschwindigkeitsbeschränkung' },
+    { id: 'w2', lemma: 'Verhandlung' },
+    { id: 'w3', lemma: 'Bundesverfassungsgericht' },
+    { id: 'w4', lemma: 'Arbeitslosigkeit' },
+    { id: 'w5', lemma: 'den Nagel auf den Kopf treffen' },
+  ];
+  const got = acceptParts(
+    [
+      { id: 'w1', parts: [{ p: 'Geschwindigkeit', ko: '속도' }, { p: 's', link: true }, { p: 'Beschränkung', ko: '제한' }] },
+      { id: 'w2', parts: [] },
+      { id: 'w3', parts: [{ p: 'Bund', ko: '연방' }, { p: 'Verfassung', ko: '헌법' }, { p: 'Gericht', ko: '법원' }] }, // es · s 빠짐 → 안 받음
+      { id: 'w4', parts: [{ p: 'Arbeit', ko: '일' }, { p: 'slosigkeit', link: true }] }, // 이음 글자가 아님 → 안 받음
+      { id: 'w5', parts: [] }, // 숙어는 안 받음
+    ],
+    list,
+  );
+  assert.deepEqual(got.get('w1'), [{ p: 'Geschwindigkeit', ko: '속도' }, { p: 's', link: true }, { p: 'Beschränkung', ko: '제한' }]);
+  assert.deepEqual(got.get('w2'), []);
+  assert.equal(got.has('w3'), false);
+  assert.equal(got.has('w4'), false);
+  assert.equal(got.has('w5'), false);
+});

@@ -83,6 +83,22 @@ export async function patchWords(db: D1Database, items: AdminWordsRequest['items
       if (it.example_hit !== null && (typeof it.example_hit !== 'string' || !/^(-|[A-Za-zÄÖÜäöüß]{1,40}(\|[A-Za-zÄÖÜäöüß]{1,40}){0,3})$/.test(it.example_hit))) throw bad('bad example_hit');
       put('example_hit', it.example_hit);
     } else if (it.example_de !== undefined) put('example_hit', null);
+    // 합성어 풀이(v13 L4): 조각 8개까지 · 낱자만 · 뜻 30자. [] = 합성어 아님(다시 묻지 않게)
+    if (it.parts !== undefined) {
+      const ok =
+        Array.isArray(it.parts) &&
+        it.parts.length <= 8 &&
+        it.parts.every(
+          (x) =>
+            x &&
+            typeof x.p === 'string' &&
+            /^[A-Za-zÄÖÜäöüß]{1,40}$/.test(x.p) &&
+            (x.ko === undefined || (typeof x.ko === 'string' && x.ko.length <= 30)) &&
+            (x.link === undefined || typeof x.link === 'boolean'),
+        );
+      if (!ok) throw bad('bad parts');
+      put('parts', JSON.stringify(it.parts.map((x) => ({ p: x.p, ...(x.ko ? { ko: x.ko } : {}), ...(x.link ? { link: true } : {}) }))));
+    }
     if (it.checked) put('checked_at', at);
     if (it.image_reset) sets.push("image_status = 'none'");
     if (sets.length) {
@@ -264,6 +280,24 @@ export async function reviewQueue(db: D1Database, limit: number, now = new Date(
 export async function exampleWords(db: D1Database) {
   const r = await db.prepare('SELECT id, lemma, example_de FROM words WHERE example_de IS NOT NULL AND example_hit IS NULL ORDER BY id').all();
   return { items: r.results.map(plain) as Array<{ id: string; lemma: string; example_de: string }> };
+}
+
+// ---------- 합성어 풀이(v13 L4) ----------
+
+/**
+ * 풀이를 아직 안 물어본 긴 낱말(10자 넘는 덩어리) — 배우는 카드 먼저, 그다음 아주 긴 것(16자+), 그다음 배울 순서.
+ * scripts/words/parts.mjs 가 하루 몇백 개씩 AI 에 묻는다.
+ */
+export async function partsQueue(db: D1Database, limit: number) {
+  const r = await db
+    .prepare(
+      `SELECT w.id, w.lemma, w.pos, w.gloss_ko FROM words w JOIN cards c ON c.word_id = w.id
+       WHERE w.parts IS NULL AND length(w.lemma) >= 10
+       ORDER BY (c.state = 0 AND c.introduced_at IS NULL), (length(w.lemma) < 16), w.seq LIMIT ?`,
+    )
+    .bind(Math.min(Math.max(1, limit), 1000))
+    .all();
+  return { items: r.results.map(plain) as Array<{ id: string; lemma: string; pos: string; gloss_ko: string | null }> };
 }
 
 // ---------- 학습 순서 ----------

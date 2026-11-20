@@ -267,6 +267,8 @@ export interface AdminWordsRequest {
     example_ko?: string;
     /** 예문 속 표제어 낱말(scripts/words/hits.mjs). null = 지움 */
     example_hit?: string | null;
+    /** 합성어 풀이(v13 L4): 조각 배열, [] = 합성어 아님. 이어 붙여 lemma 와 같은지는 scripts/words/lib.mjs acceptParts 가 본다 */
+    parts?: WordPart[];
     scene_en?: string;
     gloss_status?: 'generated' | 'checked' | 'mine';
     example_src?: string;

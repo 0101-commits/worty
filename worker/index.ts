@@ -37,7 +37,7 @@ import { POS_SET, WEAK_MIN, records, suspendWord, wordsCounts } from './stats.ts
 import { MAX_IMAGE_BYTES, approvePending, deletePending, getPending, listPending, putPending, rejectPending, reviewPending, listReviewLog, deleteReviewLog } from './pending.ts';
 import {
   LIST_ORDER, wordsExport, addReport, addRequest, exampleWords, getNews, imageWords, insertWords, listChanges, listRequests, patchWords, putNews, putSkips,
-  reseq, revertChange, reviewQueue, reviewStats, settleRequest, wordKeys,
+  reseq, revertChange, reviewQueue, reviewStats, settleRequest, wordKeys, partsQueue,
 } from './words.ts';
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
@@ -610,6 +610,9 @@ const getChanges: Handler = async ({ env, url }) =>
 const postRevert: Handler = async ({ env, params: [id] }) => json(await revertChange(env.DB, Number(id)));
 
 /** 매일 스크립트가 채울 거리: 글이 비는 단어 / 그림이 없는 단어. 공부 중인 카드 먼저, 그다음 seq. */
+/** 합성어 풀이를 물을 긴 낱말(v13 L4, scripts/words/parts.mjs) */
+const adminParts: Handler = async ({ env, url }) => json(await partsQueue(env.DB, Number(url.searchParams.get('limit') ?? 250)));
+
 /**
  * 아침 요약(scripts/summary.mjs · summary.yml, v13 G2): 단어·그림 수 + 하루 전 기준값 + 최근 공부 알림 행.
  * 기준값은 부를 때마다 그날 키(KV `_snap:YYYY-MM-DD`, 14일)에 덮어써 다음 날 「어제 대비」로 쓴다.
@@ -794,6 +797,7 @@ const routes: Route[] = [
   ['GET', /^\/api\/admin\/summary$/, adminSummary],
   ['GET', /^\/api\/admin\/images$/, adminImages],
   ['GET', /^\/api\/admin\/examples$/, adminExamples],
+  ['GET', /^\/api\/admin\/parts$/, adminParts],
   ['GET', /^\/api\/admin\/words-export$/, adminWordsExport],
   ['POST', /^\/api\/admin\/words\/insert$/, adminInsert],
 ];

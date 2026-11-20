@@ -63,6 +63,10 @@ jobs:
       - name: hits.mjs (예문 속 낱말)
         if: always() && steps.health.outcome == 'success'
         run: node scripts/words/hits.mjs $DRY
+      # 긴 낱말 합성어 풀이(v13 L4): 카드 줄바꿈 자리 · 뒷면 풀이 줄 · 단어 상세. 하루 250개, AI 몫이 다하면 내일
+      - name: parts.mjs (합성어 풀이)
+        if: always() && steps.health.outcome == 'success'
+        run: node scripts/words/parts.mjs $DRY
       # 색인을 실제로 새로 만든 날에만(news.mjs 가 rebuilt=1). 다시 만들기가 실패해 지난 색인이 남은 날은 저장하지 않는다
       - name: 색인 캐시 저장(새로 만든 날만)
         if: always() && steps.news.outputs.rebuilt == '1'

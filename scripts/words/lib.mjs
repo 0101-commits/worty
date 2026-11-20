@@ -525,3 +525,56 @@ export function acceptHits(arr, list) {
   }
   return out;
 }
+
+// ---------- 합성어 풀이(v13 L4) ----------
+
+/** 합성어 풀이를 묻는 글(Flash-Lite). 조각 = 표기 그대로 잘라 이어 붙이면 표제어와 같아야 함 · 이음 글자는 따로 link */
+export function partsPrompt(list) {
+  return `Split each German word into its compound components, for Korean learners.
+Rules:
+- Cut the word itself: the parts concatenated (ignoring upper/lower case) must equal the word exactly. Do not restore dropped letters or change spelling.
+- Linking elements (Fugenelemente) such as "s", "es", "n", "en", "er", "e" between components are their own part with "link": true.
+- Write noun components with a capital first letter (as in a dictionary). Prefixes like ver-, be-, ge-, un- and suffixes like -ung, -keit, -lich are NOT components — do not split them off.
+- Give each non-link part a short Korean meaning ("ko", max 8 Korean characters).
+- If the word is not a compound of at least two independent words, return "parts": [].
+Example: Geschwindigkeitsbeschränkung → [{"p":"Geschwindigkeit","ko":"속도"},{"p":"s","link":true},{"p":"Beschränkung","ko":"제한"}]
+Return exactly one object per item, same order, id copied unchanged: {"id": "...", "parts": [...]}.
+Output ONLY a JSON array (no prose, no code fence) with exactly ${list.length} objects.
+Items: ${JSON.stringify(list.map((w) => ({ id: w.id, word: w.lemma, meaning_ko: w.gloss_ko ?? undefined })))}`;
+}
+
+const PART_RE = /^[A-Za-zÄÖÜäöüß]{1,40}$/;
+const LINKS = new Set(['s', 'es', 'n', 'en', 'er', 'e', 'ns', 'ens']);
+
+/**
+ * partsPrompt 답 → Map(id → 조각 배열 | []). 받는 것: 이어 붙이면 표제어(대소문자 무시) · 낱자만 · 이음 글자는 짧은 것만 ·
+ * 진짜 조각(이음 아님) 둘 이상. [] 는 AI 가 「합성어 아님」이라 답했을 때만(다시 안 물음).
+ * 꼴이 이상한 답은 적지 않아 다음 날 다시 묻는다. 띄어쓰기 있는 낱말(숙어)은 받지 않는다.
+ */
+export function acceptParts(arr, list) {
+  const byId = new Map(list.map((w) => [w.id, w]));
+  const out = new Map();
+  for (const o of Array.isArray(arr) ? arr : []) {
+    const w = byId.get(o?.id);
+    if (!w || out.has(o.id) || !Array.isArray(o.parts) || /\s/.test(w.lemma)) continue;
+    if (o.parts.length === 0) {
+      out.set(o.id, []);
+      continue;
+    }
+    const parts = o.parts.map((x) => ({
+      p: typeof x?.p === 'string' ? x.p.trim() : '',
+      ko: typeof x?.ko === 'string' ? x.ko.trim().slice(0, 30) : undefined,
+      link: x?.link === true,
+    }));
+    if (parts.length > 8 || parts.some((x) => !PART_RE.test(x.p))) continue;
+    if (parts.map((x) => x.p).join('').toLowerCase() !== w.lemma.toLowerCase()) continue;
+    if (parts.some((x) => x.link && !LINKS.has(x.p.toLowerCase()))) continue;
+    const real = parts.filter((x) => !x.link);
+    if (real.length < 2 || parts[0].link || parts[parts.length - 1].link) continue;
+    out.set(
+      o.id,
+      parts.map((x) => (x.link ? { p: x.p, link: true } : { p: x.p, ...(x.ko ? { ko: x.ko } : {}) })),
+    );
+  }
+  return out;
+}
