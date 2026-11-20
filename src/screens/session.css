@@ -615,3 +615,5 @@ mark.hit {
 .ss-expr .mean { margin: 0; font-size: var(--fs-h2); font-weight: 700; line-height: 1.4; }
 .ss-expr .base { margin: 0; font-size: var(--fs-h3); font-weight: 700; color: var(--p60); }
 .ss-expr .sent { margin: 0; color: var(--g60); font-size: var(--fs-sm); line-height: 1.55; }
+/* 연습 빈 화면: 범위 넓혀 시작(v13 U4) */
+.practice-wider { display: grid; gap: var(--sp-2); width: 100%; max-width: 320px; margin: 0 auto; }

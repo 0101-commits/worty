@@ -116,9 +116,20 @@ function Round(props: { mode: PracticeMode; items: DeckItem[]; pool: PoolWord[];
         <Emoji name="think" size={140} />
         <h2>퀴즈를 만들 단어가 없어요</h2>
         <p>{mode === 'match' && props.items.length > 0 ? '짝은 뜻이 서로 다른 단어가 3개 이상 있어야 해요. 범위를 넓혀 보세요.' : SCOPE_EMPTY[scope]}</p>
-        <Button variant="outlined" color="assistive" onClick={() => navigate('/today')}>
-          {T.backToday}
-        </Button>
+        {/* 범위가 비면 넓혀서 바로 시작(v13 U4 — 공부 전 「빈칸」을 누르면 「오늘로」에서 끝나던 막다른 길) */}
+        <div className="practice-wider">
+          {scope === 'today' && (
+            <Button onClick={() => navigate(`/practice?mode=${mode}&scope=week&n=${n}`)}>이번 주 단어로 시작</Button>
+          )}
+          {(scope === 'today' || scope === 'week' || scope === 'wrong') && (
+            <Button variant={scope === 'today' ? 'outlined' : 'solid'} onClick={() => navigate(`/practice?mode=${mode}&scope=all&n=${n}`)}>
+              배운 단어 전체로 시작
+            </Button>
+          )}
+          <Button variant="outlined" color="assistive" onClick={() => navigate('/today')}>
+            {T.backToday}
+          </Button>
+        </div>
       </section>
     )
 

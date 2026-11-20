@@ -96,6 +96,8 @@ export interface TodayResponse {
     /** 「새 단어 더 받기」로 더한 수 · 하루 상한 */
     extra: number;
     extra_max: number;
+    /** 쉰 다음 날 복습 상한(v13 L2)으로 내일 이후로 미룬 복습 수(없으면 빠짐) */
+    deferred?: number;
   };
   /** 오늘 채점 수: good = O(어려움·좋음·쉬움) / again = X(다시). v11 부터 어려움 = 늦게 맞힘 */
   ratings: { good: number; again: number };
@@ -204,6 +206,10 @@ export interface StatsResponse {
 export interface WordsCountsResponse {
   weak: number;
   week: number;
+  /** 배우는 중(소개했거나 채점한 카드) 수 — 단어 목록 묶음 머리(v13 U5) */
+  learning?: number;
+  /** 하루 새 단어 수(설정) — 「다음 30일」 묶음 = 이 수 × 30 */
+  new_per_day?: number;
 }
 
 /** GET /api/stats/records — 기록 화면(v11) */

@@ -91,7 +91,7 @@ test('/api/words: 품사 · 그림 · 자주 틀림 · 이번 주 · 제외 거�
 
 test('/api/words/counts · 제외 · 상세 O/X', async () => {
   const db = seed();
-  assert.deepEqual((await call(db, 'GET', '/api/words/counts')).body, { weak: 2, week: 2 });
+  assert.deepEqual((await call(db, 'GET', '/api/words/counts')).body, { weak: 2, week: 2, learning: 3, new_per_day: 5 }); // learning · new_per_day = v13 U5 묶음 머리
   assert.equal((await call(db, 'POST', '/api/word/w5/suspend', { suspended: true })).status, 200);
   assert.equal(db.raw.prepare("SELECT suspended, suspended_at FROM cards WHERE word_id = 'w5'").get().suspended, 1);
   assert.equal((await call(db, 'POST', '/api/word/w5/suspend', { suspended: false })).body.suspended, false);

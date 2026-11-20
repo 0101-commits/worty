@@ -1,6 +1,6 @@
 // 단어(v11): 검색 한 줄 · 꼬리표 한 줄(상태·레벨·품사·그림) · 바로가기(자주 틀림·이번 주) · 순서 · 목록 · 「N개 연습」
 // 검색은 움라우트를 푼 글자로 맞고(ae = ä), 앞의 der/die/das 는 무시, 한국어 뜻도 찾는다(서버 /api/words).
-import { useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { BottomSheet, Button, Chip, ContentBadge, SearchField, Skeleton, TopNavigationButton, SegmentedControl, SegmentedControlItem } from '../k/index.tsx'
 import { IconChevronDown, IconPlus } from '../k/icons.tsx'
 import type { DeckItem, WordsCountsResponse } from '../../shared/api.ts'
@@ -9,8 +9,8 @@ import { num } from '../format.ts'
 import { useDebounced } from '../hooks.ts'
 import { linkTo, navigate } from '../router.ts'
 import { AddWord } from '../AddWord.tsx'
-import { dayDiff } from '../format.ts'
-import { EMPTY_FILTER, practiceParams, toQuery, type SortKey, type WordsFilter } from '../wordsFilter.ts'
+import { article, dayDiff } from '../format.ts'
+import { EMPTY_FILTER, practiceParams, toQuery, withGroups, type SortKey, type WordsFilter } from '../wordsFilter.ts'
 import { Emoji, ErrorBox, Lemma, POS_LABEL, Top } from '../ui.tsx'
 import './words.css'
 
@@ -184,17 +184,24 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
         ) : (
           <>
             <ul className="wd-list">
-              {fresh.items.map((it) => (
-                <li key={it.word.id}>
-                  <a className={'wd-row' + (it.word.image ? ' has-img' : '')} {...linkTo('/word/' + it.word.id)}>
-                    {it.word.image && <Thumb id={it.word.id} />}
-                    <div className="wd-mid">
-                      <Lemma word={it.word} className="wd-w" />
-                      <div className="wd-m">{it.word.gloss_ko ?? '뜻 준비 중'}</div>
-                    </div>
-                    <Pill item={it} />
-                  </a>
-                </li>
+              {withGroups(fresh.items, !filtered, counts).map(({ it, head }) => (
+                <Fragment key={it.word.id}>
+                  {head && (
+                    <li className="wd-group">
+                      <h3>{head}</h3>
+                    </li>
+                  )}
+                  <li>
+                    <a className="wd-row has-img" {...linkTo('/word/' + it.word.id)}>
+                      {it.word.image ? <Thumb id={it.word.id} /> : <Initial word={it.word} />}
+                      <div className="wd-mid">
+                        <Lemma word={it.word} className="wd-w" />
+                        <div className="wd-m">{it.word.gloss_ko ?? '뜻 준비 중'}</div>
+                      </div>
+                      <Pill item={it} />
+                    </a>
+                  </li>
+                </Fragment>
               ))}
             </ul>
             {fresh.items.length < fresh.total && (
@@ -241,6 +248,16 @@ export default function Words({ add = '', url = '', open = false }: { add?: stri
       </BottomSheet>
       <AddWord key={addText + '|' + url} open={addOpen} onClose={() => setAddOpen(false)} initialWord={addText} initialUrl={url} />
     </>
+  )
+}
+
+/** 그림 없는 줄: 빈 칸 대신 관사 색 머리글자(v13 U5) */
+function Initial({ word }: { word: DeckItem['word'] }) {
+  const a = article(word)
+  return (
+    <span className={'wd-ini' + (a === 'der' || a === 'die' || a === 'das' ? ' ' + a : '')} aria-hidden="true">
+      {word.lemma.replace(/^sich\s+/i, '').slice(0, 1).toUpperCase()}
+    </span>
   )
 }
 

@@ -31,11 +31,19 @@ export function weekStart(day: string): string {
 export async function wordsCounts({ env }: Ctx): Promise<Response> {
   const day = studyDay();
   const out = await memo(env.DB, `words-counts|${day}`, 120_000, async () => {
-    const [weak, week] = await env.DB.batch([
+    const [weak, week, learning, npd] = await env.DB.batch([
       env.DB.prepare(`SELECT count(*) AS n FROM cards WHERE lapses >= ${WEAK_MIN}`),
       env.DB.prepare('SELECT count(*) AS n FROM cards WHERE introduced_at >= ?').bind(studyDayStartUtc(addDays(day, -6))),
+      // 단어 목록 묶음 머리(v13 U5): 배우는 중 = 목록 「순서」의 앞쪽(LIST_ORDER 와 같은 가름)
+      env.DB.prepare('SELECT count(*) AS n FROM cards WHERE NOT (state = 0 AND introduced_at IS NULL)'),
+      env.DB.prepare("SELECT value AS n FROM settings WHERE key = 'new_per_day'"),
     ]);
-    return { weak: num(rows(weak)[0]?.n), week: num(rows(week)[0]?.n) } satisfies WordsCountsResponse;
+    return {
+      weak: num(rows(weak)[0]?.n),
+      week: num(rows(week)[0]?.n),
+      learning: num(rows(learning)[0]?.n),
+      new_per_day: num(rows(npd)[0]?.n) || 5,
+    } satisfies WordsCountsResponse;
   });
   return Response.json(out);
 }

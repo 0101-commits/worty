@@ -1,6 +1,7 @@
 // 단어 목록의 거르기·정렬 ↔ 주소(?…) ↔ WordsQuery. 단어 화면의 「N개 연습」이 /drill?from=words&… 로 넘기고,
 // 연습 화면이 같은 주소를 같은 목록으로 되돌릴 때 parseWordsParams 를 쓴다.
-import type { Level, Pos, WordsQuery } from '../shared/api.ts'
+import type { DeckItem, Level, Pos, WordsCountsResponse, WordsQuery } from '../shared/api.ts'
+import { num } from './format.ts'
 
 export type SortKey = NonNullable<WordsQuery['sort']>
 
@@ -53,3 +54,29 @@ export function parseWordsParams(q: URLSearchParams): WordsQuery {
     sort: g('sort') as WordsQuery['sort'],
   }
 }
+
+/**
+ * 묶음 머리(v13 U5 · L5): 거르기 없는 「순서」 목록에서 배우는 중 → 다음 30일(하루 새 단어 × 30) → 1년 안 → 그 뒤.
+ * 목록이 9,000개를 묶음 없이 한 줄로 보여 주던 것. 거르기·검색 중엔 머리를 안 단다
+ */
+export function withGroups(items: DeckItem[], on: boolean, counts: WordsCountsResponse | null): Array<{ it: DeckItem; head: string | null }> {
+  const perDay = counts?.new_per_day ?? 5
+  const next30 = perDay * 30
+  // 배울 범위(v13 L5): 지금 속도로 1년 치(하루 새 단어 × 365)까지가 「앞으로 배울 단어」, 그 뒤는 참고용
+  const next365 = perDay * 365
+  let fresh = 0
+  return items.map((it, i) => {
+    if (!on) return { it, head: null }
+    const learning = !(it.card.state === 0 && !it.card.introduced_at)
+    let head: string | null = null
+    if (learning && i === 0) head = `배우는 중${counts?.learning ? ` ${num(counts.learning)}개` : ''}`
+    if (!learning) {
+      if (fresh === 0) head = `다음 30일에 배울 단어 ${num(next30)}개`
+      else if (fresh === next30) head = `1년 안에 배울 단어 ${num(next365 - next30)}개`
+      else if (fresh === next365) head = '그 뒤 · 지금 속도로 1년 넘게 걸리는 단어'
+      fresh++
+    }
+    return { it, head }
+  })
+}
+
