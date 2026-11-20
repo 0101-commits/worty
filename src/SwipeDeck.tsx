@@ -6,7 +6,8 @@ import { IconPlay } from './k/icons.tsx'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { animate, motion, useMotionValue, useMotionValueEvent, useTransform, type MotionValue } from 'motion/react'
 import { Button, OxBar } from './k/index.tsx'
-import type { DeckItem, Rating, Word } from '../shared/api.ts'
+import type { DeckItem, Rating, Word, WordPart } from '../shared/api.ts'
+import { hyphenate, pieces } from './hyphen.ts'
 import { SWIPE, decideSwipe, isWeak } from './deck.ts'
 import { OX_RATING, sinceLabel } from './session.ts'
 import { T } from './text.ts'
@@ -30,15 +31,82 @@ interface Props {
   onUndo?: () => void
 }
 
-/** 관사 색(der 파랑 · die 빨강 · das 초록) + 단어 */
-export function CardWord({ word, className = '' }: { word: Pick<Word, 'lemma' | 'pos' | 'gender'>; className?: string }) {
+/** 글씨 맞춤 최소 크기(v13 U1) */
+const MIN_FONT = 20
+
+/**
+ * 긴 낱말 글씨 맞춤(v13 U1): 안 끊기는 조각(합성어 풀이가 있으면 조각, 없으면 낱말 통째)이 칸보다 넓으면
+ * 1px 씩 줄인다(최소 20px). 그래도 넘치면 음절 자리에서 끊는다. 칸 폭이 바뀌면 다시 잰다.
+ */
+function useFitWord(ref: RefObject<HTMLElement | null>, lemma: string, parts: WordPart[] | null | undefined) {
+  const [fit, setFit] = useState<{ size: number | null; syl: boolean }>({ size: null, syl: false })
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || !el.parentElement || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      const avail = el.clientWidth
+      if (!avail) return
+      // 같은 class 의 숨은 복사본으로 잰다(글자 크기를 바꾼 이 요소의 style 은 건드리지 않음)
+      const probe = el.cloneNode(false) as HTMLElement
+      probe.removeAttribute('style')
+      probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;left:-9999px;top:0;display:inline'
+      el.parentElement!.appendChild(probe)
+      const base = parseFloat(getComputedStyle(probe).fontSize)
+      const first = parts?.length ? pieces(hyphenate(lemma, parts, 'parts')) : lemma.split(/\s+/)
+      const widest = (size: number) => {
+        probe.style.fontSize = size + 'px'
+        let w = 0
+        for (const t of first) {
+          probe.textContent = t
+          w = Math.max(w, probe.getBoundingClientRect().width)
+        }
+        return w
+      }
+      let size = base
+      while (size > MIN_FONT && widest(size) > avail) size--
+      const syl = widest(size) > avail
+      probe.remove()
+      const next = { size: size < base ? size : null, syl }
+      setFit((v) => (v.size === next.size && v.syl === next.syl ? v : next))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref, lemma, parts])
+  return fit
+}
+
+/** 관사 색(der 파랑 · die 빨강 · das 초록) + 단어. fit = 칸 폭에 맞춰 글씨 줄이기 · 끊는 자리(카드 앞뒷면) */
+export function CardWord({ word, className = '', fit = false }: { word: Pick<Word, 'lemma' | 'pos' | 'gender' | 'parts'>; className?: string; fit?: boolean }) {
   const a = article(word)
   const g = a === 'der' || a === 'die' || a === 'das' ? a : ''
+  const ref = useRef<HTMLSpanElement>(null)
+  const f = useFitWord(fit ? ref : NO_REF, word.lemma, word.parts)
+  // 맞춤 전 · 조각이 들어가면 합성어 경계에서만, 안 들어가면 음절에서도 끊음
+  const text = !fit ? hyphenate(word.lemma, word.parts) : f.syl ? hyphenate(word.lemma, word.parts, 'syllables') : word.parts?.length ? hyphenate(word.lemma, word.parts, 'parts') : word.lemma
   return (
-    <span className={'fc-word ' + className} lang="de">
+    <span ref={ref} className={'fc-word ' + className + (fit ? ' fit' : '')} lang="de" style={f.size ? { fontSize: f.size } : undefined}>
       {a && <span className={'fc-art' + (g ? ' g-' + g : '')}>{a} </span>}
-      {word.lemma}
+      {text}
     </span>
+  )
+}
+const NO_REF: RefObject<HTMLElement | null> = { current: null }
+
+/** 합성어 풀이 한 줄(v13 L4): Geschwindigkeit 속도 + s + Beschränkung 제한. 뜻이 하나도 없으면 안 그림 */
+export function PartsLine({ parts, className = 'fc-parts' }: { parts: WordPart[] | null | undefined; className?: string }) {
+  if (!parts || parts.length < 2 || !parts.some((x) => x.ko)) return null
+  return (
+    <p className={className}>
+      {parts.map((x, i) => (
+        <span key={i}>
+          {i > 0 && ' + '}
+          <b lang="de">{x.p}</b>
+          {x.ko && !x.link ? ' ' + x.ko : ''}
+        </span>
+      ))}
+    </p>
   )
 }
 
@@ -88,12 +156,12 @@ export function CardFace({ item: { word, card }, back }: { item: DeckItem; back:
     <>
       <CardPicture word={word} showKo={back} />
       <div className="fc-body">
-        <div className="fc-row">
-          <CardWord word={word} className={back ? 'sm' : ''} />
+        {/* 낱말은 한 줄 전체(v13 U1: ▶·칩이 같은 줄에 있어 글자 칸이 2/3뿐이었다) */}
+        <CardWord word={word} className={back ? 'sm' : ''} fit />
+        {back && <PartsLine parts={word.parts} />}
+        <div className="fc-meta">
           <SpeakButton text={(article(word) ? article(word) + ' ' : '') + word.lemma} />
           <span className={'fc-since ' + s.tone}>{s.text}</span>
-        </div>
-        <div className="fc-meta">
           <span>{POS_LABEL[word.pos] ?? word.pos}</span>
           <LevelBadge level={word.level} />
           {isWeak(card) && <WeakBadge />}

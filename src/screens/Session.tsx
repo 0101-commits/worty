@@ -9,7 +9,7 @@ import type { DeckItem, PoolWord, PracticeResultsRequest, PracticeScope, Rating 
 import { api, errorText, sendReviews } from '../api.ts'
 import { articleApi, type SavedExpr } from '../articles.ts'
 import { speak } from '../tts.ts'
-import { deckReducer, initDeck } from '../deck.ts'
+import { deckReducer, initDeck, remaining } from '../deck.ts'
 import { useAsync } from '../hooks.ts'
 import { linkTo, navigate, useRoute } from '../router.ts'
 import { EXPR_PER_DAY, MORE_N, autoGrade, limitFor, mergePool, orderToday, oxCount, planStep, practiceMode, type Kind, type Step } from '../session.ts'
@@ -94,14 +94,15 @@ export default function Session() {
   )
 }
 
-function SessionHead({ value, count, onUndo, onMenu }: { value: number; count: string; onUndo?: () => void; onMenu?: () => void }) {
+function SessionHead({ value, count, pos, onUndo, onMenu }: { value: number; count: string; pos?: number; onUndo?: () => void; onMenu?: () => void }) {
   return (
     <header className="ss-head">
       <IconButton aria-label={T.sessionClose} onClick={() => navigate('/today')}>
         <IconClose />
       </IconButton>
       <ProgressBar value={value} label={T.progress} />
-      <span className="ss-count num" data-testid="progress" aria-live="polite">
+      {/* data-pos = 지금까지 넘긴 장 수 + 1(점검 스크립트용 — 보이는 글은 「남은 N」) */}
+      <span className="ss-count num" data-testid="progress" data-pos={pos} aria-live="polite">
         {count}
       </span>
       {onUndo && (
@@ -143,6 +144,8 @@ function Run({ d, onMore, onRetry }: { d: Loaded; onMore: () => void; onRetry: (
   const [ei, setEi] = useState(0)
   const [eox, setEox] = useState({ o: 0, x: 0 })
   const total = s.queue.length + d.exprs.length
+  // 진행 표시 = 남은 낱말(소개 뒤 퀴즈·다시 보기로 줄이 늘어도 늘지 않음, v13 U2)
+  const left0 = remaining(s)
   const answered = useRef<Answered | null>(null)
   // +10개: 채점 하나(단어|시각) → 퀴즈 꼴(연습 기록 방식)
   const kinds = useRef(new Map<string, Kind>())
@@ -263,7 +266,7 @@ function Run({ d, onMore, onRetry }: { d: Loaded; onMore: () => void; onRetry: (
     }
     return (
       <div className="ss">
-        <SessionHead value={(s.queue.length + ei) / Math.max(1, total)} count={`${s.queue.length + ei + 1} / ${total}`} />
+        <SessionHead value={(left0.total + ei) / Math.max(1, left0.total + d.exprs.length)} count={T.left(d.exprs.length - ei)} />
         <main className="page ss-page" data-step="expr">
           <ExprStep key={d.exprs[ei].id} x={d.exprs[ei]} onGrade={gradeExpr} />
         </main>
@@ -337,8 +340,9 @@ function Run({ d, onMore, onRetry }: { d: Loaded; onMore: () => void; onRetry: (
   return (
     <div className="ss">
       <SessionHead
-        value={s.index / Math.max(1, total)}
-        count={`${s.index + 1} / ${total}`}
+        value={(left0.total - left0.left) / Math.max(1, left0.total + d.exprs.length)}
+        count={T.left(left0.left + d.exprs.length)}
+        pos={s.index + 1}
         onUndo={ans ? undoAnswer : undoable && s.history ? undo : undefined}
         onMenu={single ? () => setMenu(true) : undefined}
       />

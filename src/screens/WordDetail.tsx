@@ -13,6 +13,7 @@ import type { WordDetailResponse } from '../../shared/api.ts'
 import './word-detail.css'
 
 import { speak } from '../tts.ts'
+import { PartsLine } from '../SwipeDeck.tsx'
 
 /** 「다음 복습 11/13 · O 6 · X 1」 — 내부 용어(안정도 · 난이도) 없이 날짜와 O·X 수만 */
 function myRecord(d: WordDetailResponse): string {
@@ -86,6 +87,7 @@ function Body({ d, reload }: { d: WordDetailResponse; reload: () => void }) {
           </IconButton>
         </div>
         <div className="wdt-mean">{w.gloss_ko ?? '뜻 준비 중'}</div>
+        <PartsLine parts={w.parts} className="wdt-parts" />
         <div className="wdt-chips">
           <ContentBadge size="xsmall" variant="outlined" color="neutral">{POS_LABEL[w.pos] ?? w.pos}</ContentBadge>
           <LevelBadge level={w.level} />

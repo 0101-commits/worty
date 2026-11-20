@@ -134,7 +134,8 @@ try {
   }
   rmSync(SHOTS, { recursive: true, force: true })
   mkdirSync(SHOTS, { recursive: true })
-  browser = await chromium.launch()
+  // GATE_CHROME = 브라우저 실행 파일(빌려 쓰는 playwright 판과 받은 브라우저 판이 어긋날 때)
+  browser = await chromium.launch(process.env.GATE_CHROME ? { executablePath: process.env.GATE_CHROME } : {})
 
   for (const vp of VIEWPORTS) {
     for (const scheme of SCHEMES) {
@@ -256,7 +257,7 @@ try {
         await page.reload({ waitUntil: 'networkidle' }) // 목업 상태(채점)를 처음으로
         const progress = page.getByTestId('progress')
         await page.waitForSelector('main[data-step="flip"]')
-        const before = (await progress.textContent()).trim()
+        const before = (await progress.getAttribute('data-pos'))
         await page.screenshot({ path: join(SHOTS, 'session-flip-390.png'), fullPage: true })
         const box = await page.getByTestId('deck-top').boundingBox()
         const cx = box.x + box.width / 2
@@ -270,8 +271,8 @@ try {
         await page.screenshot({ path: join(SHOTS, 'session-swiping-390.png') })
         await page.mouse.up()
         await sleep(700)
-        const after = (await progress.textContent()).trim()
-        const n = (s) => Number(s.split('/')[0])
+        const after = (await progress.getAttribute('data-pos'))
+        const n = (s) => Number(s) // data-pos(v13 U2: 보이는 글은 「남은 N」)
         // 다음 카드가 기울거나 밀린 채 남으면 안 된다(이전 카드의 이동값이 새는 결함)
         const tilt = (await page.getByTestId('deck-top').count()) ? await page.getByTestId('deck-top').evaluate((el) => getComputedStyle(el).transform) : 'none'
         const flat = tilt === 'none' || /^matrix\(1, 0, 0, 1, 0, 0\)$/.test(tilt)
@@ -282,10 +283,10 @@ try {
         // 키보드: Z 되돌리기 → → O, 탭 = 뒤집기(뜻 · X O 막대)
         await page.keyboard.press('z')
         await sleep(150)
-        const undone = (await progress.textContent()).trim()
+        const undone = (await progress.getAttribute('data-pos'))
         await page.keyboard.press('ArrowRight')
         await sleep(600)
-        const keyed = (await progress.textContent()).trim()
+        const keyed = (await progress.getAttribute('data-pos'))
         await page.getByTestId('deck-top').click()
         await sleep(300)
         const flipped = await page.getByTestId('deck-top').locator('.fc-mean').count()
@@ -298,17 +299,17 @@ try {
         // ⋯ 메뉴(바텀시트)가 열려 있으면 화살표·스페이스가 뒤 카드를 채점·뒤집지 않는다 · 넘기기 = 채점 없이 다음
         await page.getByRole('button', { name: '더 보기' }).click()
         await sleep(200)
-        const beforeMenu = (await progress.textContent()).trim()
+        const beforeMenu = (await progress.getAttribute('data-pos'))
         await page.keyboard.press('ArrowRight')
         await page.keyboard.press(' ')
         await sleep(600)
-        const afterMenu = (await progress.textContent()).trim()
+        const afterMenu = (await progress.getAttribute('data-pos'))
         const sheetOpen = await page.locator('[aria-modal="true"]').count()
         const items = await page.locator('[aria-modal="true"] .ss-menu button').allTextContents()
         await page.screenshot({ path: join(SHOTS, 'session-menu-390.png') })
         await page.getByRole('button', { name: '넘기기' }).click()
         await sleep(300)
-        const skipped = (await progress.textContent()).trim()
+        const skipped = (await progress.getAttribute('data-pos'))
         const closed = (await page.locator('[aria-modal="true"]').count()) === 0
         const menuOk = afterMenu === beforeMenu && sheetOpen === 1 && items.join(',') === '그림 이상,뜻 수정,넘기기' && n(skipped) === n(beforeMenu) + 1 && closed && errors.length === 0
         if (!menuOk) fail(`세션 ⋯ 메뉴: 진행 ${beforeMenu} → ${afterMenu} · 시트 ${sheetOpen} · 항목 ${items.join(',')} · 넘기기 → ${skipped} · 닫힘 ${closed}`)
@@ -437,7 +438,7 @@ try {
     await page.goto(BASE + '#/session', { waitUntil: 'networkidle' })
     const progress = page.getByTestId('progress')
     await progress.waitFor()
-    const before = (await progress.textContent()).trim()
+    const before = (await progress.getAttribute('data-pos'))
     const box = await page.getByTestId('deck-top').boundingBox()
     const cx = Math.round(box.x + box.width / 2)
     const cy = Math.round(box.y + box.height / 2)
@@ -450,7 +451,7 @@ try {
     }
     await touch('touchEnd', [])
     await sleep(700)
-    const after = (await progress.textContent()).trim()
+    const after = (await progress.getAttribute('data-pos'))
     // 손가락 두 개로 벌리기 → 배율이 1 이어야 한다
     await touch('touchStart', [{ x: 150, y: 300, id: 1 }, { x: 240, y: 300, id: 2 }])
     for (let i = 1; i <= 8; i++) {
@@ -461,7 +462,7 @@ try {
     await sleep(300)
     const scale = await page.evaluate(() => window.visualViewport?.scale ?? 1)
     const viewportMeta = await page.evaluate(() => document.querySelector('meta[name=viewport]')?.getAttribute('content') ?? '')
-    const n = (s) => Number(s.split('/')[0])
+    const n = (s) => Number(s) // data-pos(v13 U2: 보이는 글은 「남은 N」)
     const ok = n(after) === n(before) + 1 && scale === 1 && /user-scalable=no/.test(viewportMeta) && errors.length === 0
     if (!ok) fail(`터치 밀기: ${before} → ${after} · 배율 ${scale} · viewport "${viewportMeta}"${errors.length ? ' · 콘솔 오류 ' + errors.join(' | ') : ''}`)
     table.push({ route: '터치 밀기 · 확대 막기', vp: '390 폰', light: ok ? 'ok' : 'FAIL', dark: '-', sw: `${before} → ${after} · 배율 ${scale}` })

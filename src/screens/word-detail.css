@@ -2,7 +2,9 @@
 .wdt-card { gap: var(--sp-3); overflow: hidden; }
 .wdt-img { display: block; width: calc(100% + 32px); margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) 0; aspect-ratio: 4 / 3; max-height: 280px; object-fit: cover; background: var(--g5); }
 .wdt-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
-.wdt-lemma { font-size: var(--fs-h1); line-height: 1.2; overflow-wrap: anywhere; }
+.wdt-lemma { font-size: var(--fs-h1); line-height: 1.2; overflow-wrap: anywhere; hyphens: manual; min-width: 0; }
+.wdt-parts { margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--g60); }
+.wdt-parts b { color: var(--g80); }
 .wdt-mean { font-size: var(--fs-h3); font-weight: 700; }
 .wdt-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .wdt-plural { font-size: var(--fs-sm); color: var(--g60); }

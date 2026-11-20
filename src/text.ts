@@ -44,6 +44,7 @@ export const T = {
   // 세션
   sessionClose: '오늘 화면으로',
   progress: '진행',
+  left: (n: number) => `남은 ${n}`,
   undo: '되돌리기',
   next: '다음',
   showBack: '뜻 보기',

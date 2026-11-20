@@ -34,3 +34,31 @@ test('G2 아침 요약: 알림 시계 멈춤·실패는 ✗', () => {
   assert.match(healed.at(-1), /morning 2026-11-02 sent/);
   assert.match(alarmLines({ next: 'x', last: { at: '2026-11-19T22:30:00Z', kind: 'morning', result: 'error:boom' } }, [])[0], /^✗/);
 });
+
+import { deckReducer, initDeck, remaining } from '../src/deck.ts';
+
+test('U2 진행 표시: 소개 뒤 퀴즈가 붙어도 남은 낱말 수는 늘지 않는다', () => {
+  const item = (id) => ({ word: { id }, card: { word_id: id, state: 0, due: '2026-11-20T00:00:00Z' } });
+  let s = initDeck(['a', 'b', 'c'].map(item));
+  assert.deepEqual(remaining(s), { left: 3, total: 3 });
+  s = deckReducer(s, { type: 'introduce' }); // a 를 몇 장 뒤로(퀴즈) — 줄은 4장
+  assert.equal(s.queue.length, 4);
+  assert.deepEqual(remaining(s), { left: 3, total: 3 });
+  s = deckReducer(s, { type: 'skip' });
+  assert.deepEqual(remaining(s), { left: 2, total: 3 });
+});
+
+import { SHY, hyphenate, partBreaks, pieces } from '../src/hyphen.ts';
+
+test('U1 끊는 자리: 합성어 풀이가 있으면 그 경계(이음 s 는 앞에), 없으면 음절', () => {
+  const show = (s) => s.replaceAll(SHY, '|');
+  const parts = [{ p: 'Geschwindigkeit', ko: '속도' }, { p: 's', link: true }, { p: 'Beschränkung', ko: '제한' }];
+  assert.equal(show(hyphenate('Geschwindigkeitsbeschränkung', parts, 'parts')), 'Geschwindigkeits|beschränkung');
+  assert.deepEqual(partBreaks('Geschwindigkeitsbeschränkung', [{ p: 'Geschwindigkeit' }, { p: 'Beschränkung' }]), []); // 이어 붙여도 안 같으면 버림
+  assert.equal(show(hyphenate('Bundesverfassungsgericht')), 'Bun|des|ver|fas|sungs|ge|richt');
+  assert.equal(show(hyphenate('verschreibungspflichtig')), 'ver|schrei|bungs|pflich|tig');
+  assert.equal(show(hyphenate('Rechtsanwaltskanzlei')), 'Rechts|an|walts|kanz|lei');
+  assert.equal(hyphenate('Umzug'), 'Umzug'); // 짧은 낱말은 그대로
+  assert.equal(show(hyphenate('den Nagel auf den Kopf treffen')), 'den Nagel auf den Kopf treffen');
+  assert.deepEqual(pieces(hyphenate('Geschwindigkeitsbeschränkung', parts, 'parts')), ['Geschwindigkeits', 'beschränkung']);
+});

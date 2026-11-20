@@ -1,5 +1,6 @@
 // 여러 화면이 같이 쓰는 작은 부품
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { hyphenate } from './hyphen.ts'
 import { animate } from 'motion/react'
 import { Button, ContentBadge, IconButton, TopNavigation, TopNavigationButton, useRegionStore, type ThemeColorsToken } from './k/index.tsx'
 import { IconBell, IconChevronLeft, IconMinus, IconPlus, IconSetting } from './k/icons.tsx'
@@ -92,12 +93,13 @@ export function WeakBadge() {
 }
 
 /** 관사(색) + 단어 */
-export function Lemma({ word, className = '' }: { word: Pick<Word, 'lemma' | 'pos' | 'gender'>; className?: string }) {
+export function Lemma({ word, className = '' }: { word: Pick<Word, 'lemma' | 'pos' | 'gender' | 'parts'>; className?: string }) {
   const a = article(word)
   return (
     <span className={'lemma ' + className} lang="de">
       {a && <span className={'art ' + a}>{a} </span>}
-      {word.lemma}
+      {/* 긴 낱말은 합성어 · 음절 자리에서만 끊음(v13 U1) */}
+      {hyphenate(word.lemma, word.parts)}
     </span>
   )
 }

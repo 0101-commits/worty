@@ -122,6 +122,15 @@ export function firstUp(queue: DeckItem[], id: string | null): DeckItem[] {
   return i <= 0 ? queue : [queue[i], ...queue.slice(0, i), ...queue.slice(i + 1)]
 }
 
+/**
+ * 진행 표시(v13 U2): 남은 낱말 수(같은 낱말이 소개 뒤 퀴즈 · 다시 보기로 줄에 또 있어도 하나) · 전체 낱말 수.
+ * 예전 「1/9 → 2/10」은 소개 카드 뒤 퀴즈가 붙어 분모가 함께 늘었다. 남은 수는 줄기만 하거나 그대로다.
+ */
+export function remaining(s: Pick<DeckState, 'queue' | 'index'>): { left: number; total: number } {
+  const ids = (from: number) => new Set(s.queue.slice(from).map((it) => it.word.id)).size
+  return { left: ids(Math.min(s.index, s.queue.length)), total: ids(0) }
+}
+
 export function current(s: DeckState): DeckItem | undefined {
   return s.finished ? undefined : s.queue[s.index]
 }

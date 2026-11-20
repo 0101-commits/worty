@@ -171,6 +171,22 @@
 .fc-word.sm {
   font-size: var(--fs-h1);
 }
+/* 카드 낱말은 한 줄 전체(v13 U1). 끊는 자리는 보이지 않는 끊김 표시(hyphen.ts) — 그래도 넘치는 조각만 아무 데서나 */
+.fc-word.fit {
+  display: block;
+  hyphens: manual;
+  -webkit-hyphens: manual;
+}
+.fc-parts {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--g60);
+}
+.fc-parts b {
+  color: var(--g80);
+  font-weight: 700;
+}
 .fc-art {
   font-size: 0.64em;
   font-weight: 700;

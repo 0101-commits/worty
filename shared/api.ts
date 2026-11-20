@@ -6,6 +6,13 @@ export type Rating = 1 | 2 | 3 | 4; // again hard good easy
 /** ts-fsrs State: 0 New · 1 Learning · 2 Review · 3 Relearning */
 export type CardState = 0 | 1 | 2 | 3;
 
+/** 합성어 풀이 조각(v13 L4): p = 조각 글자 · ko = 뜻 · link = 이음 글자(-s- · -n- …). 이어 붙이면 lemma 와 같다 */
+export interface WordPart {
+  p: string;
+  ko?: string;
+  link?: boolean;
+}
+
 export interface Word {
   id: string;
   lemma: string;
@@ -23,6 +30,8 @@ export interface Word {
   /** true 면 /img/{id}.webp 가 있다 */
   image: boolean;
   seq: number;
+  /** 합성어 풀이(v13 L4, 아직 없거나 합성어가 아니면 null). 카드 줄바꿈 자리 · 뒷면 풀이 줄 · 단어 상세 */
+  parts?: WordPart[] | null;
 }
 
 export interface Card {
