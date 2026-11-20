@@ -36,6 +36,12 @@ export async function api(p, { method = 'GET', body } = {}) {
 
 /** 디스코드 알림. PC 면 AI_CLI 알리미, 깃허브 서버면 DISCORD_WEBHOOK_URL 로 바로. 보냈으면 true */
 export async function notify(type, title, desc) {
+  // v13 G2: 보낸 결과를 실행 기록에 한 줄(주소·본문은 안 찍음) — 「조용함」이 정상인지 알림 빠짐인지 가리려고
+  const ok = await sendNotify(type, title, desc).catch(() => false);
+  console.log(`디스코드 알림 ${ok ? '보냄' : '실패'}: ${title}`);
+  return ok;
+}
+async function sendNotify(type, title, desc) {
   const notifier = 'C:/Users/cgpar/AI_CLI/scripts/discord-notify.js';
   if (existsSync(notifier)) {
     const r = spawnSync(process.execPath, [notifier, 'send'], { input: JSON.stringify({ type, title, desc, cli: 'claude' }), encoding: 'utf8', windowsHide: true, timeout: 20000 });

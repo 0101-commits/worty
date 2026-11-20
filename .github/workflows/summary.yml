@@ -1,0 +1,30 @@
+# 아침 요약 한 통(v13 G2, 결정 D8 = 매일): 어제 그림·단어 증가 · 지난 24시간 작업 성공/실패 · 공부 알림 상태.
+# 알림 시계 확인을 겸한다 — 멈췄으면 Worker 가 다시 맞추고 요약에 「멈춤 → 다시 맞춤」이 찍힌다.
+# 비밀값: APP_URL · API_TOKEN · DISCORD_WEBHOOK_URL. 실행 기록은 공개라 보냄/실패만 찍는다.
+name: summary
+
+on:
+  schedule:
+    - cron: '30 23 * * *' # 한국 08:30 (깃허브 예약은 늦곤 함)
+  workflow_dispatch:
+
+permissions:
+  actions: read # 지난 24시간 작업 결과 읽기
+  contents: read
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: 요약 보내기
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/summary.mjs

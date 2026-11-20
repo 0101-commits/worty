@@ -610,6 +610,23 @@ const getChanges: Handler = async ({ env, url }) =>
 const postRevert: Handler = async ({ env, params: [id] }) => json(await revertChange(env.DB, Number(id)));
 
 /** 매일 스크립트가 채울 거리: 글이 비는 단어 / 그림이 없는 단어. 공부 중인 카드 먼저, 그다음 seq. */
+/**
+ * 아침 요약(scripts/summary.mjs · summary.yml, v13 G2): 단어·그림 수 + 하루 전 기준값 + 최근 공부 알림 행.
+ * 기준값은 부를 때마다 그날 키(KV `_snap:YYYY-MM-DD`, 14일)에 덮어써 다음 날 「어제 대비」로 쓴다.
+ */
+const adminSummary: Handler = async ({ env }) => {
+  const day = studyDay();
+  const [w, img, nt] = await env.DB.batch([
+    env.DB.prepare('SELECT count(*) AS n FROM words'),
+    env.DB.prepare("SELECT count(*) AS n FROM words WHERE image_status = 'ok'"),
+    env.DB.prepare("SELECT kind, day, status, sent_at FROM notifications WHERE kind <> 'test' ORDER BY id DESC LIMIT 4"),
+  ]);
+  const now = { day, words: count(w), images: count(img) };
+  const prev = (await env.IMG.get(`_snap:${addDays(day, -1)}`, 'json')) as { words: number; images: number } | null;
+  await env.IMG.put(`_snap:${day}`, JSON.stringify(now), { expirationTtl: 14 * 86_400 });
+  return json({ ...now, prev, notifications: nt.results });
+};
+
 const runway: Handler = async ({ env, url }) => {
   const text = clamp(intParam(url.searchParams.get('text'), 60), 0, 500);
   // 그림 상한 2000: kaggle.mjs 가 검사 두 번 떨어진 단어(수백 개)를 건너뛰고도 250개를 고를 수 있게. 정렬 때문에 읽는 행 수는 상한과 거의 무관
@@ -774,6 +791,7 @@ const routes: Route[] = [
   ['POST', /^\/api\/admin\/requests\/(\d+)$/, adminSettle],
   ['GET', /^\/api\/admin\/review-stats$/, adminReviewStats],
   ['GET', /^\/api\/admin\/keys$/, adminKeys],
+  ['GET', /^\/api\/admin\/summary$/, adminSummary],
   ['GET', /^\/api\/admin\/images$/, adminImages],
   ['GET', /^\/api\/admin\/examples$/, adminExamples],
   ['GET', /^\/api\/admin\/words-export$/, adminWordsExport],
