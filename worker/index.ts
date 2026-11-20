@@ -810,7 +810,10 @@ const app = {
     try {
       if (url.pathname === '/api/admin/schedule' && req.method === 'POST') {
         if (!ok) throw new HttpError(401, 'unauthorized');
+        // test_in=초 → 시험 통(폰으로 감) · probe=morning|evening → 보내지 않고 같은 길 미리 보기 · 없으면 상태 확인(멈췄으면 다시 맞춤)
         const t = Number(url.searchParams.get('test_in') ?? 0);
+        const probe = url.searchParams.get('probe');
+        if (probe === 'morning' || probe === 'evening') return json(await scheduler(env).probe(probe));
         return json(t > 0 ? await scheduler(env).testIn(Math.min(t, 600)) : await scheduler(env).ensure());
       }
       let pathMatched = false;

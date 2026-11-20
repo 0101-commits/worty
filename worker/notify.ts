@@ -19,6 +19,9 @@ export async function webhookUrl(env: Env): Promise<string | null> {
   return env.DISCORD_WEBHOOK || (await env.IMG.get(WEBHOOK_KEY));
 }
 
+/** 미리 보기(probe): 보내기 직전까지 같은 길을 돌고 보내지 않음 — 알림 행도 안 남긴다 */
+export type DryResult = { dry: { kind: string; n: number; title: string; cloze?: boolean } };
+
 export type RunResult =
   | { skipped: string }
   | {
@@ -131,7 +134,7 @@ async function restNow(env: Env, day: string, settings: Settings): Promise<Rest>
   return restOf(results.map((r) => r.d), day, settings.vacation_until);
 }
 
-export async function runMorning(env: Env, now: Date = new Date()): Promise<RunResult> {
+export async function runMorning(env: Env, now: Date = new Date(), opts: { dry?: boolean } = {}): Promise<RunResult | DryResult> {
   const day = studyDay(now);
   const settings = await loadSettings(env.DB);
   if (settings.vacation_until && settings.vacation_until >= day) return { skipped: 'vacation' };
@@ -145,6 +148,7 @@ export async function runMorning(env: Env, now: Date = new Date()): Promise<RunR
   const withImage = items.find((i) => i.word.image && i.word.id === cloze?.id) ?? items.find((i) => i.word.image);
   const imageUrl = withImage ? `${env.APP_URL}/img/${withImage.word.id}.webp` : null;
   const title = morningTitle({ n: items.length, md: monthDay(day), ...rest, seed: seedOf(day) });
+  if (opts.dry) return { dry: { kind: 'morning', n: items.length, title, cloze: !!cloze } };
   return dispatch(env, 'morning', day, (n) => morningPayload({ day, items, total: items.length, appUrl: env.APP_URL, imageUrl, cloze, n, title }), now, settings.discord_on);
 }
 
@@ -167,7 +171,12 @@ export function eveningSkip(p: {
  * 남은 카드 = 오늘 몫(F4)에서 아직 안 한 것 — 오늘 학습일 안에 마감되는 복습 + 오늘 목록의 안 본 새 단어.
  * 오늘 몫을 다 했으면 남은 카드 0 → 알림 없음(예전엔 낮에 풀린 카드 때문에 거의 늘 갔다).
  */
-export async function runEvening(env: Env, now: Date = new Date(), kind: 'evening' | 'evening_later' = 'evening'): Promise<RunResult> {
+export async function runEvening(
+  env: Env,
+  now: Date = new Date(),
+  kind: 'evening' | 'evening_later' = 'evening',
+  opts: { dry?: boolean } = {},
+): Promise<RunResult | DryResult> {
   const day = studyDay(now);
   const settings = await loadSettings(env.DB);
   if (settings.vacation_until && settings.vacation_until >= day) return { skipped: 'vacation' };
@@ -186,6 +195,7 @@ export async function runEvening(env: Env, now: Date = new Date(), kind: 'evenin
   const rest = await restNow(env, day, settings);
   if (quiet('evening', rest.rest, day)) return { skipped: 'quiet' };
   const title = eveningTitle({ n: remaining, rest: rest.rest, studiedToday: reviewedToday > 0, seed: seedOf(day) });
+  if (opts.dry) return { dry: { kind, n: remaining, title } };
   return dispatch(env, kind, day, (n) => eveningPayload({ remaining, minutes: minutesFor(remaining), appUrl: env.APP_URL, n, title }), now, settings.discord_on);
 }
 

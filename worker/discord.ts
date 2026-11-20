@@ -132,6 +132,11 @@ export function eveningPayload(p: { remaining: number; minutes: number; appUrl: 
   ]);
 }
 
+/** 운영 알림 한 줄(알림 시계 멈춤·실패). 공부 알림과 달리 설정(discord_on)과 상관없이 디스코드로 */
+export function opsPayload(title: string, desc: string): Payload {
+  return wrap([text(`**${title}**\n${desc}`.slice(0, 1800))]);
+}
+
 export function testPayload(): Payload {
   return wrap([text('**Wortling 연결됐어요**\n내일 아침 7:30 에 첫 카드가 와요.')]);
 }

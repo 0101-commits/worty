@@ -73,3 +73,9 @@ export function alarmDue(now: number, slotAt: number | undefined, laterAt: numbe
 export function nextAlarm(slotAt: number, laterAt: number | undefined): number {
   return laterAt !== undefined && laterAt < slotAt ? laterAt : slotAt;
 }
+
+/** 알람이 이만큼 넘게 지난 시각에 걸려 있으면 멈춘 것으로 본다(11-03~11-20 17일 멈춤: 지난 시각이 남아 ensure 가 손대지 않았다) */
+export const ALARM_STUCK_MS = 15 * 60_000;
+export function alarmStuck(at: number | null, now: number): boolean {
+  return at !== null && now - at > ALARM_STUCK_MS;
+}
