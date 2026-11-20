@@ -1,6 +1,6 @@
 // 매일 단어 작업 1/2(words.yml, 05:17 KST): 내가 넣은 단어 → 뉴스 신호 → 새 단어 → 뉴스 순위 → 학습 순서. 다음은 review.mjs.
 // 설계 docs/superpowers/specs/2026-10-15-word-review-news-design.md
-// 옵션: --dry(서버에 안 씀, 수만) · --max=N(새 단어 상한, 기본 30) · --backlog=N(보강 목록에서 넣을 수, 기본 50).
+// 옵션: --dry(서버에 안 씀, 수만) · --max=N(새 단어 상한, 기본 10 — 2026-11-20 v13 결정 D1: 하루 5개 학습이면 남은 단어가 이미 5년 치) · --backlog=N(보강 목록에서 넣을 수, 기본 50).
 // 환경: NEWS_FEEDS=0 이면 tagesschau·NDR 을 읽지 않는다.
 // 뉴스 글은 어디에도 남기지 않는다 — 기본형별 기사 수와 링크 1개만 서버로, 로그엔 수만(공개 저장소의 Actions 로그).
 import { readFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ import {
 } from './lib.mjs';
 
 const DRY = process.argv.includes('--dry');
-const MAX = Number((process.argv.find((a) => a.startsWith('--max=')) || '').slice(6)) || 30;
+const MAX = Number((process.argv.find((a) => a.startsWith('--max=')) || '').slice(6)) || 10;
 const BACKLOG_MAX = Number((process.argv.find((a) => a.startsWith('--backlog=')) || '').slice(10)) || 50;
 /** 보강 목록 한 번에 AI 에 묻는 수(답이 길면 JSON 이 잘린다) */
 const BACKLOG_CHUNK = 25;
